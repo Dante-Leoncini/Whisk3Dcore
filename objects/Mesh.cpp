@@ -307,10 +307,13 @@ void (*g_meshOverlayHook)(Mesh*) = NULL;
 
 void Mesh::RenderObject() {
     const bool editActiva = ((Object*)this == g_editMesh); // esta malla en Edit Mode
-    // sin vertices no hay nada. Sin CARAS (todas borradas en Edit) igual hay que
-    // dibujar el edit mesh (vertices + bordes sueltos), asi que en Edit NO cortamos.
+    // sin vertices no hay nada. Sin CARAS propias igual hay que dibujar: en Edit (edit mesh: verts+bordes), o si
+    // hay malla GENERADA por modificadores (ej. Screw sobre un perfil sin caras -> la botella vive en genValido),
+    // o si hay loose edges (wireframe suelto que se ve como overlay). Sino en modo objeto una malla sin caras
+    // propias quedaba INVISIBLE aunque tuviera geometria generada/suelta -> "no se ve la botella".
     if (!vertex || vertexSize <= 0) return;
-    if ((!faces || facesSize < 3) && !editActiva) return;
+    const bool hayGen = (genValido && genVertex && genFaces);
+    if ((!faces || facesSize < 3) && !editActiva && !hayGen && looseEdges.empty()) return;
     // el material por defecto SIEMPRE tiene que existir (en Symbian arranca NULL)
     if (!MaterialDefecto) MaterialDefecto = new Material("Default", true);
     namespace gfx = w3dEngine;

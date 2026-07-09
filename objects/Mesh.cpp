@@ -558,8 +558,13 @@ void Mesh::RenderObject() {
 // dibuja el buffer de bordes PRECALCULADO (bordesBuf) como GL_LINES. No arma nada
 // por frame: solo color + DrawLines. Lo usan el contorno de seleccion y el wireframe.
 void Mesh::RenderBordes(const float* color, float width, bool pushBack) {
-    if (bordesBuf.empty() || !vertex) return;
     namespace gfx = w3dEngine;
+    // con malla GENERADA por modificadores (subdiv/screw) el contorno usa SUS aristas de poligono; sino la
+    // base (bordesBuf). Sin esto, un objeto con modificador no mostraba borde de seleccion (la base no coincide).
+    const bool usaGen = (genValido && !genBordesBuf.empty() && genVertex);
+    const std::vector<GLfloat>& buf = usaGen ? genBordesBuf : bordesBuf;
+    GLfloat* restore = usaGen ? genVertex : vertex;
+    if (buf.empty() || !restore) return;
     gfx::Disable(gfx::Lighting);
     gfx::Disable(gfx::Texture2D);
     gfx::DisableArray(gfx::NormalArray);
@@ -569,11 +574,11 @@ void Mesh::RenderBordes(const float* color, float width, bool pushBack) {
     gfx::LineWidth(width);
     if (pushBack) gfx::DepthRange(0.0008f, 1.0f); // (el contorno usa glPolygonOffset)
 
-    gfx::VertexPointer3f(0, &bordesBuf[0]);
-    gfx::DrawLines((int)(bordesBuf.size()/3));
+    gfx::VertexPointer3f(0, &buf[0]);
+    gfx::DrawLines((int)(buf.size()/3));
 
     if (pushBack) gfx::DepthRange(0.0f, 1.0f);
     gfx::LineWidth(1.0f);
-    gfx::VertexPointer3f(0, vertex);
+    gfx::VertexPointer3f(0, restore);
     gfx::Invalidate();
 }

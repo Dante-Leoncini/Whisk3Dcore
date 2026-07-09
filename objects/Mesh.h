@@ -169,6 +169,8 @@ class Mesh : public Object {
         GLfloat*  genVertex; GLbyte* genNormals; GLfloat* genUV; GLubyte* genColor;
         MeshIndex* genFaces; int genVertexSize; int genFacesSize;
         std::vector<MaterialGroup> genMaterialsGroup;
+        std::vector<GLfloat> genBordesBuf; // aristas de POLIGONO de la malla generada (sin diagonales de tri) para el
+                                           // CONTORNO de seleccion (subdiv/screw): sino el objeto seleccionado no muestra borde
         bool genValido; // true = hay malla generada por modificadores -> usarla en el render
         void GenerarMallaModificada(); // EDITOR: rehace las gen buffers aplicando el stack (genValido=false si vacio)
         void LiberarMallaModificada(); // libera las gen buffers
@@ -408,6 +410,10 @@ class Mesh : public Object {
         // de la malla; inside=true las deja para adentro (tilde del panel). Arregla caras
         // invisibles (normal al reves). No cambia la geometria, solo el orden de los verts.
         bool RecalcularOrientacionEdit(bool inside);
+
+        // FLIP NORMALS (menu Mesh > Normals > Flip): invierte el winding de las caras sel (o todas) sin
+        // condicion -> da vuelta las normales. Simple: si miran para un lado, quedan para el otro.
+        bool FlipNormalesEdit();
 
         // TRIANGULATE FACES (Ctrl+T, menu Face): parte las caras SELECCIONADAS de >3 lados en triangulos
         // (abanico desde el 1er vertice). Preserva UV/color/normal por corner. false si no hay caras que triangular.

@@ -38,6 +38,7 @@ Mesh::Mesh(Object* parent, Vector3 pos)
     radioGeom = 0.0f;
     edit = NULL; // la malla de edicion se crea on-demand al entrar a Edit Mode
     uvMapActivo = -1; colorActivo = -1; grupoActivo = -1; // sin capas hasta PoblarCapas
+    weightPaintOn = false; // se prende en modo Weight Paint
     modificadorActivo = -1; // stack de modificadores vacio (lo gestiona el editor)
     genVertex = NULL; genNormals = NULL; genUV = NULL; genColor = NULL; genFaces = NULL;
     genVertexSize = 0; genFacesSize = 0; genValido = false; // sin malla generada hasta que haya modificadores
@@ -367,6 +368,47 @@ void Mesh::AplicarMaterial(Material* mat, bool conLuz, bool solido) {
 // hook de overlays del editor (lo registra el editor al arrancar; NULL en una app sin editor)
 void (*g_meshOverlayHook)(Mesh*) = NULL;
 
+// WEIGHT PAINT: arma weightPaintColor (RGBA por vertice de render) con el degradado del peso del grupo 'grupo':
+// negro (0) -> amarillo (0.5) -> rojo (1). Mapea los pesos (indexados por CONTROL-POINT del FBX) a los vertices de
+// render via vertCtrlPoint. Si no hay grupo/mapa valido, todo negro (peso 0).
+void Mesh::ConstruirColorPeso(int grupo) {
+    weightPaintColor.clear();
+    if (vertexSize <= 0) return;
+    weightPaintColor.resize((size_t)vertexSize * 4, 0);
+    // peso DENSO por control-point (0 los que no estan en el grupo)
+    std::vector<float> cpW;
+    if (grupo >= 0 && grupo < (int)vertexGroups.size() && !vertCtrlPoint.empty()) {
+        int maxCP = 0;
+        for (size_t i = 0; i < vertCtrlPoint.size(); i++) if (vertCtrlPoint[i] > maxCP) maxCP = vertCtrlPoint[i];
+        cpW.assign((size_t)maxCP + 1, 0.0f);
+        VertexGroup* vg = vertexGroups[grupo];
+        for (size_t i = 0; i < vg->verts.size() && i < vg->pesos.size(); i++) {
+            int cp = vg->verts[i];
+            if (cp >= 0 && cp <= maxCP) cpW[(size_t)cp] = vg->pesos[i];
+        }
+    }
+    for (int i = 0; i < vertexSize; i++) {
+        float w = 0.0f;
+        if (!cpW.empty() && i < (int)vertCtrlPoint.size()) {
+            int cp = vertCtrlPoint[i];
+            if (cp >= 0 && cp < (int)cpW.size()) w = cpW[(size_t)cp];
+        }
+        if (w < 0.0f) w = 0.0f; if (w > 1.0f) w = 1.0f;
+        // rampa AZUL(0) -> amarillo(0.5) -> rojo(1). El cero es azul (no negro): negro se confundia con el fondo/piso
+        // oscuro. Azul = "sin peso" es la convencion de Blender y se ve bien sobre fondo oscuro.
+        GLubyte r, g, b;
+        if (w < 0.5f) { float t = w / 0.5f;          // azul(40,70,210) -> amarillo(255,255,0)
+            r = (GLubyte)(40.0f  + (255.0f - 40.0f)  * t);
+            g = (GLubyte)(70.0f  + (255.0f - 70.0f)  * t);
+            b = (GLubyte)(210.0f + (0.0f   - 210.0f) * t);
+        } else { float t = (w - 0.5f) / 0.5f;         // amarillo(255,255,0) -> rojo(255,0,0)
+            r = 255; g = (GLubyte)(255.0f * (1.0f - t)); b = 0;
+        }
+        weightPaintColor[(size_t)i*4+0] = r; weightPaintColor[(size_t)i*4+1] = g;
+        weightPaintColor[(size_t)i*4+2] = b; weightPaintColor[(size_t)i*4+3] = 255;
+    }
+}
+
 void Mesh::RenderObject() {
     const bool editActiva = ((Object*)this == g_editMesh); // esta malla en Edit Mode
     // sin vertices no hay nada. Sin CARAS propias igual hay que dibujar: en Edit (edit mesh: verts+bordes), o si
@@ -388,6 +430,26 @@ void Mesh::RenderObject() {
     if (normals)     gfx::NormalPointer3b(normals);
     if (vertexColor) gfx::ColorPointer4ub(vertexColor);
     if (uv) { gfx::EnableArray(gfx::TexCoordArray); gfx::TexCoordPointer2f(0, uv); }
+
+    // WEIGHT PAINT: la malla se dibuja SOLIDA con el degradado de peso por vertice (negro->amarillo->rojo), sin luz
+    // ni textura. Es un inspector visual del peso del grupo activo (editar viene despues). Reemplaza el render normal.
+    if (weightPaintOn && !weightPaintColor.empty() && faces && facesSize >= 3) {
+        gfx::Disable(gfx::Lighting);
+        gfx::DisableArray(gfx::NormalArray);
+        gfx::Disable(gfx::Texture2D);
+        gfx::DisableArray(gfx::TexCoordArray);
+        gfx::TexEnvAlphaOnly(false);
+        gfx::Disable(gfx::Blend);
+        gfx::Enable(gfx::DepthTest);
+        gfx::Enable(gfx::CullFace);
+        gfx::EnableArray(gfx::ColorArray);
+        gfx::ColorPointer4ub(&weightPaintColor[0]);
+        gfx::VertexPointer3f(0, vertex);
+        gfx::DrawTriangles(facesSize, faces);
+        gfx::DisableArray(gfx::ColorArray);
+        gfx::Invalidate();
+        return;
+    }
 
     // PASES PLANOS (Normal View / ZBuffer / Alpha): la malla se dibuja UNLIT con un COLOR PLANO y, para
     // los materiales TRANSPARENTES, se usa SOLO el alpha de su textura (el COLOR de la textura NO se

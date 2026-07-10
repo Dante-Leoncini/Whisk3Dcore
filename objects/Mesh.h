@@ -299,6 +299,16 @@ class Mesh : public Object {
         std::vector<int> posRep;
         int vertsAgrupados; // cantidad de posiciones UNICAS (para el overlay de stats)
 
+        // WEIGHT PAINT / rig: por cada vertice de render, el indice de CONTROL-POINT del FBX del que salio (lo llena
+        // el importador FBX). Con esto los pesos de un vertex group (indexados por control-point) se mapean a los
+        // vertices de render para pintar el degradado de peso. Vacio en mallas que no vienen de un FBX con skin.
+        std::vector<int> vertCtrlPoint;
+        // WEIGHT PAINT: color por vertice (RGBA, vertexSize*4) del degradado de peso del grupo activo (negro=0 ->
+        // amarillo=0.5 -> rojo=1). weightPaintOn lo prende el editor en modo Weight Paint; RenderObject lo dibuja.
+        std::vector<GLubyte> weightPaintColor;
+        bool weightPaintOn;
+        void ConstruirColorPeso(int grupo); // rellena weightPaintColor desde el grupo 'grupo' (o negro si no hay)
+
         // centro geometrico LOCAL (promedio de las posiciones unicas). El foco ("."")
         // y el pivot lo usan (en mundo) en vez del origen. Se calcula en CalcularBordes.
         Vector3 centroGeom;

@@ -192,6 +192,9 @@ class Mesh : public Object {
         unsigned int vboPos, vboNor, vboCol, vboUV, vboIdx; // handles (posiciones/normales/color/uv/indices)
         unsigned     vboGeomVer;   // skinGeomVersion con el que se subieron los atributos ESTATICOS (col/uv/idx + base)
         int          vboSkinFrame; // lastSkinFrame con el que se subieron pos/nor (skinneado: re-sube al cambiar la pose)
+        int          vboSkinFramePrev; // lastSkinFrame del render ANTERIOR: detecta si la pose esta cambiando ACTIVAMENTE
+                                       // (animando) -> se dibuja de client-array para NO re-especificar el VBO cada frame
+                                       // (el re-spec del buffer que el tiler MBX todavia lee = STALL de sync = jitter de fps)
         int          vboVertN, vboIdxN; // cantidades subidas (para no re-crear si no cambio el tamaño)
         bool         vboRenderActivo; // true mientras se dibuja desde VBOs -> AplicarMaterial bindea el uv VBO (no client-uv)
         bool         vboPoseSkinneada; // el VBO de posiciones tiene una pose DEFORMADA subida? -> al quitar el armature

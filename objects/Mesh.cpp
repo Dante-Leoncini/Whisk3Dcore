@@ -47,7 +47,7 @@ Mesh::Mesh(Object* parent, Vector3 pos)
     chromeExpPos = NULL; chromeExpUV = NULL; chromeExpCount = 0; chromeUVValid = false; chromeCacheEq = true; // reflejo (lazy)
     genChromeExpPos = NULL; genChromeExpUV = NULL; genChromeCount = 0; genChromeValid = false; // reflejo de la malla generada (lazy)
     tangents = NULL; nmColors = NULL; tangentsValid = false; // normal mapping (lazy)
-    vboPos = vboNor = vboCol = vboUV = vboIdx = 0; vboGeomVer = 0; vboSkinFrame = -999999; vboVertN = 0; vboIdxN = 0; vboRenderActivo = false; vboPoseSkinneada = false; // VBOs (lazy)
+    vboPos = vboNor = vboCol = vboUV = vboIdx = 0; vboGeomVer = 0; vboSkinFrame = -999999; vboSkinFramePrev = -999999; vboVertN = 0; vboIdxN = 0; vboRenderActivo = false; vboPoseSkinneada = false; // VBOs (lazy)
 }
 
 // ===================================================
@@ -658,10 +658,23 @@ void Mesh::RenderObject() {
         bool drawVBO = false;
         if (gfx::VBOSoportado() && !useGen && !weightPaintOn && !editActiva && !anyFancy && faces && facesSize >= 3) {
             unsigned geomVer = skinGeomVersion;
+            // atributos ESTATICOS (col/uv/idx + pos/nor base): re-subir solo al cambiar la geometria
             if (vboGeomVer != geomVer || vboVertN != vertexSize || !vboPos) { SubirVBO(posBuf, norBuf, false); vboGeomVer = geomVer; vboSkinFrame = lastSkinFrame; vboPoseSkinneada = (skinArmature != NULL); }
-            else if (skinArmature && vboSkinFrame != lastSkinFrame)         { SubirVBO(posBuf, norBuf, true);  vboSkinFrame = lastSkinFrame; vboPoseSkinneada = true; }
-            else if (!skinArmature && vboPoseSkinneada)                     { SubirVBO(posBuf, norBuf, true);  vboPoseSkinneada = false; } // armature removido -> re-subir el bind (sino queda la ultima pose)
-            if (vboPos && vboIdx) {
+            // POSE skinneada: el VBO de pos/nor ya tiene la pose ACTUAL?
+            bool poseEnVBO = (!skinArmature) || (vboSkinFrame == lastSkinFrame);
+            if (skinArmature && !poseEnVBO) {
+                // la pose cambio desde la ultima subida. Si esta ANIMANDO (cambio TAMBIEN desde el render anterior) NO
+                // re-subimos: re-especificar el VBO que el tiler del MBX todavia lee del frame previo = STALL de sync
+                // (la causa del jitter de fps). Se dibuja pos/nor de client-array este frame (mismo transfer, sin stall).
+                // Cuando la anim se ASIENTA (pose estable entre 2 renders) subimos 1 vez y volvemos al VBO (recupera el
+                // beneficio de orbitar un personaje pausado).
+                bool animandoActivo = (lastSkinFrame != vboSkinFramePrev);
+                if (!animandoActivo) { SubirVBO(posBuf, norBuf, true); vboSkinFrame = lastSkinFrame; vboPoseSkinneada = true; poseEnVBO = true; }
+            } else if (!skinArmature && vboPoseSkinneada) {
+                SubirVBO(posBuf, norBuf, true); vboPoseSkinneada = false; // armature removido -> re-subir el bind (sino queda la ultima pose)
+            }
+            vboSkinFramePrev = lastSkinFrame;
+            if (vboPos && vboIdx && poseEnVBO) {
                 gfx::VertexVBO(vboPos);
                 if (norBuf && vboNor)      gfx::NormalVBO(vboNor);
                 if (vertexColor && vboCol) gfx::ColorVBO(vboCol);
@@ -669,6 +682,8 @@ void Mesh::RenderObject() {
                 gfx::BindIndexVBO(vboIdx);
                 drawVBO = true;
             }
+            // si !poseEnVBO (malla skinneada animando): drawVBO=false -> cae al path CLIENT-ARRAY (pos/nor/col/uv/idx de
+            // RAM, ya seteados arriba con VertexPointer3f(posBuf) etc). Sin re-spec del VBO -> sin stall del tiler.
         }
         vboRenderActivo = drawVBO; // AplicarMaterial bindea el uv VBO (no client-uv) mientras esto este activo
 

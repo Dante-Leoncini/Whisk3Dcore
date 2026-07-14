@@ -156,12 +156,18 @@ void PrepararSkin(Armature* a){
     // usar el TL como bind si la MAYORIA de los huesos lo tienen CONSISTENTE con el FK-rest (banana), O si el FK es
     // degenerado (biped): en ambos casos el bind real es el TransformLink (barney/nani antes caian a FK-rest roto).
     a->skinUsaBind = (totalSkin > 0 && conBind * 2 > totalSkin) || a->skinReconstruirFK;
-    // el TransformLink del biped trae la ESCALA del armature BAKEADA (escCols ~100). Se normaliza (escala->1)
-    // preservando posicion+orientacion, para que el FK reconstruido, el bind y el delta de animacion trabajen TODOS
-    // en escala 1. Sin esto: el delta derecha dispara los huesos (x100), o el izquierda deja la malla 100x chica.
+    // el TransformLink del biped 3ds Max trae la ESCALA DEL FIGURE bakeada (~85-110x) tanto en las COLUMNAS (escCols)
+    // como en la POSICION (traslacion ~6100 vs malla ~74). Se quita la escala uniforme del figure DIVIDIENDO todo por
+    // la longitud de columna: las columnas quedan ortonormales (escala->1) Y la posicion baja al espacio de la malla.
+    // Sin esto el esqueleto queda GIGANTE (~85x) y, como los huesos pivotean en ~6100 pero la malla esta en ~74, la
+    // rotacion animada dispara los vertices lejos = deformacion rota. Con esto huesos y malla comparten escala.
     if (a->skinReconstruirFK) for (size_t i = 0; i < N; i++){ Matrix4& m = a->bones[i].tlNode;
-        for (int c = 0; c < 3; c++){ float l = sqrtf(m.m[c*4]*m.m[c*4] + m.m[c*4+1]*m.m[c*4+1] + m.m[c*4+2]*m.m[c*4+2]);
-            if (l > 1e-8f){ m.m[c*4]/=l; m.m[c*4+1]/=l; m.m[c*4+2]/=l; } } }
+        float ls[3];
+        for (int c = 0; c < 3; c++) ls[c] = sqrtf(m.m[c*4]*m.m[c*4] + m.m[c*4+1]*m.m[c*4+1] + m.m[c*4+2]*m.m[c*4+2]);
+        float s = (ls[0] + ls[1] + ls[2]) / 3.0f; if (s < 1e-8f) s = 1.0f; // escala uniforme del figure
+        for (int c = 0; c < 3; c++) if (ls[c] > 1e-8f){ m.m[c*4]/=ls[c]; m.m[c*4+1]/=ls[c]; m.m[c*4+2]/=ls[c]; }
+        m.m[12]/=s; m.m[13]/=s; m.m[14]/=s; // la POSICION tambien: sino el esqueleto queda 85x mas grande que la malla
+    }
     // BIND = TransformLink real (no el FK-rest): la malla fue skinneada en la pose del TransformLink, que puede
     // diferir de la Lcl-rest. skinMatrix = world_FK * inv(tlNode) -> malla PEGADA al hueso con el FK correcto.
     if (a->skinUsaBind){

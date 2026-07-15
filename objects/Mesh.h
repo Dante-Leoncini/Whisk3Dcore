@@ -246,7 +246,7 @@ class Mesh : public Object {
         // crea las capas iniciales (1 UVMap "UVMap", 1 ColorLayer "Col") desde los arrays
         // de render actuales si todavia no hay ninguna. Por corner (orden de faces3d).
         void PoblarCapas();
-        void LiberarCapas(); // borra y libera todas las capas (destructor / Regenerar)
+        void LiberarCapas(bool incluirGrupos = true); // libera uv/color (+ vertex groups si incluirGrupos). Join/Apply usan false para PRESERVAR el skinning
         int  ContarCorners() const; // cantidad de esquinas de cara (indice de las capas por-corner)
 
         // el render uv[]/vertexColor[] se DERIVA de la capa ACTIVA (la llama el editor al

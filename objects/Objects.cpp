@@ -387,6 +387,9 @@ Object* FindObjectByName(Object* node, const std::string& name){
     return NULL; // no encontrado
 }
 
+// Armature es core-bound y Symbian-safe (solo incluye Objects.h/Matrix4.h): fuera del ifndef para que
+// las ramas de Pose Mode (A/None/Invert -> a->bones) compilen tambien en Symbian.
+#include "Armature.h" // Pose Mode: seleccionar/deseleccionar huesos
 #ifndef W3D_SYMBIAN
 // La clase base NO depende de los subtipos del editor: esos includes (Target, Constraint,
 // Scene, Collection, Instance, Mirror, Gamepad, Curve, Camera) estaban MUERTOS. Solo usa
@@ -680,6 +683,10 @@ void DeseleccionarTodo(bool IncluirColecciones){
 	if (estado != editNavegacion) return;
 	if (InteractionMode == EditMode && g_editMesh){
         g_editMesh->EditSeleccionarTodo(false); // edit: deseleccionar todos los sub-elementos
+	} else if (InteractionMode == PoseMode && ObjActivo && ObjActivo->getType() == ObjectType::armature){
+        Armature* a = (Armature*)ObjActivo; // Pose Mode: None deselecciona TODOS los huesos (+ sin hueso activo)
+        for (size_t b = 0; b < a->bones.size(); b++) a->bones[b].select = false;
+        a->boneActivo = -1; // sino el hueso activo seguia resaltado (parecia seleccionado)
 	} else if (InteractionMode == ObjectMode && SceneCollection){
         ObjSelects.clear();
         SceneCollection->DeseleccionarCompleto(IncluirColecciones);
@@ -711,6 +718,9 @@ void SeleccionarTodoForzado(bool IncluirColecciones){
     if (estado != editNavegacion) return; // no durante un transform
     if (InteractionMode == EditMode && g_editMesh){
         g_editMesh->EditSeleccionarTodo(true); // edit: seleccionar todos los sub-elementos
+    } else if (InteractionMode == PoseMode && ObjActivo && ObjActivo->getType() == ObjectType::armature){
+        Armature* a = (Armature*)ObjActivo; // Pose Mode: A selecciona TODOS los huesos (antes no hacia nada)
+        for (size_t b = 0; b < a->bones.size(); b++) a->bones[b].select = true;
     } else if (InteractionMode == ObjectMode && SceneCollection){
         DeseleccionarTodo(IncluirColecciones);
         SceneCollection->SeleccionarCompleto(IncluirColecciones);
@@ -722,6 +732,10 @@ void InvertirSeleccion(bool IncluirColecciones){
     if (estado != editNavegacion) return; // no durante un transform
     if (InteractionMode == EditMode && g_editMesh){
         g_editMesh->EditInvertir(); // edit: invertir la seleccion de sub-elementos
+    } else if (InteractionMode == PoseMode && ObjActivo && ObjActivo->getType() == ObjectType::armature){
+        Armature* a = (Armature*)ObjActivo; // Pose Mode: Invert togglea el select de cada hueso
+        for (size_t b = 0; b < a->bones.size(); b++) a->bones[b].select = !a->bones[b].select;
+        if (a->boneActivo >= 0 && a->boneActivo < (int)a->bones.size() && !a->bones[a->boneActivo].select) a->boneActivo = -1; // el activo quedo deseleccionado
     } else if (InteractionMode == ObjectMode && SceneCollection){
         ObjSelects.clear();
         SceneCollection->InvertirSeleccionCompleto(IncluirColecciones);

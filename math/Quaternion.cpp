@@ -151,8 +151,8 @@ Quaternion Quaternion::FromMatrix(const Matrix4& m) {
     // Rama 3: (Máxima rotación alrededor de Z)
     else {
         float s = sqrtf(1.0f + m.m[10] - m.m[0] - m.m[5]) * 2.0f;
-        // CORRECCIÓN: Invertir signo de W para estabilidad
-        q.w = (m.m[4] - m.m[1]) / s; // m10 - m01
+        q.w = (m.m[1] - m.m[4]) / s; // m10 - m01 (era m[4]-m[1] = signo INVERTIDO -> quaternion mal cerca de Z=180,
+                                     // rompia la rotacion de huesos como la clavicula al exportar/reimportar glTF)
         q.x = (m.m[2]  + m.m[8]) / s;
         q.y = (m.m[6]  + m.m[9]) / s;
         q.z = 0.25f * s;

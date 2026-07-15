@@ -71,6 +71,11 @@ Matrix4 SkelNodeToYupMat();                       // matriz NodeToYup (nodo Z-up
 Matrix4 SkelMatRotEuler(const Vector3& deg, int order); // rotacion euler (grados) en el orden FBX
 Matrix4 SkelBoneWorldNode(Armature* a, int bone); // world del hueso en espacio nodo (pose actual)
 Vector3 SkelMatrizAEulerFBX(const Matrix4& M, int order); // rotacion (matriz) -> euler (grados) orden FBX
+void DuplicarAnimacionActiva(Armature* a);       // duplica el clip activo (nombre+fps+rango+keyframes) y lo deja activo
+// HOOK del editor: al elegir un clip desde la LISTA de animaciones (PropList modo 5, tab Armature) hay que sincronizar
+// la seleccion APP-WIDE (ActiveAnimKind/ActiveAnimArm) + cargar Start/End/FPS, cosa que vive en el editor. La lista
+// (WhiskUI) llama a este hook si esta seteado. Sin esto la lista cambiaba arm->animActiva pero el timeline no se enteraba.
+extern void (*OnSeleccionarAnimClip)(Armature* a, int clipIdx);
 void BorrarAnimacionActiva(Armature* a);         // borra el clip activo (puede quedar 0)
 void MoverAnimacionActiva(Armature* a, int dir); // reordena el clip activo (-1 arriba / +1 abajo)
 

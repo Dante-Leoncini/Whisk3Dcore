@@ -594,6 +594,29 @@ void CrearAnimacion(Armature* a){
         ++suf; char b[16]; sprintf(b, ".%03d", suf); nombre = base + b; }
     a->animations.push_back(new SkeletalAnimation(nombre));
     a->animActiva = (int)a->animations.size() - 1;
+    // arrancar la animacion NUEVA desde la pose RESET del esqueleto (sin esto quedaba la pose del clip anterior).
+    for (size_t i = 0; i < a->bones.size(); i++){ a->bones[i].poseT = a->bones[i].restT; a->bones[i].poseR = a->bones[i].restR; a->bones[i].poseS = a->bones[i].restS; }
+    a->poseDirty = false; a->lastPoseFrame = -999999; a->lastPoseAnim = -999; // forzar re-eval -> clip vacio = rest
+}
+
+// DUPLICA el clip activo (copia nombre+fps+rango+tracks/keyframes) y deja la copia como activa. (Duplicate del card;
+// solo tiene sentido si hay clips.) Los tracks son vectores por valor -> la asignacion hace copia profunda.
+// hook editor: lo setea Properties.cpp; la lista de animaciones (PropList modo 5) lo llama al seleccionar un clip.
+void (*OnSeleccionarAnimClip)(Armature* a, int clipIdx) = NULL;
+
+void DuplicarAnimacionActiva(Armature* a){
+    if (!a || a->animActiva < 0 || a->animActiva >= (int)a->animations.size()) return;
+    SkeletalAnimation* src = a->animations[a->animActiva]; if (!src) return;
+    std::string base = src->name + " copy", nombre = base; int suf = 0;
+    for (;;){ bool choca = false;
+        for (size_t i = 0; i < a->animations.size(); i++) if (a->animations[i]->name == nombre){ choca = true; break; }
+        if (!choca) break;
+        ++suf; char b[16]; sprintf(b, ".%03d", suf); nombre = base + b; }
+    SkeletalAnimation* dup = new SkeletalAnimation(nombre);
+    dup->FrameRate = src->FrameRate; dup->startFrame = src->startFrame; dup->endFrame = src->endFrame;
+    dup->tracks = src->tracks; // copia profunda (BoneTrack/AnimProperty/keyFrame son por valor)
+    a->animations.push_back(dup);
+    a->animActiva = (int)a->animations.size() - 1;
 }
 
 // pone (o actualiza) un keyframe en 'frame' con valor v, manteniendo la lista ordenada por frame.

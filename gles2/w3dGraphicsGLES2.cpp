@@ -147,7 +147,10 @@ static Arr aPos={false,3,0,0,0}, aNrm={false,3,0,0,0}, aUV={false,2,0,0,0}, aCol
 
 // ---- objetos GL + locations ----
 static GLuint prog=0, vboP=0, vboN=0, vboT=0, vboC=0, ibo=0;
-static GLint uMVP,uMV,uNMat,uUseTex,uTex,uLightOn,uDot3On,uReplaceOn,uFogOn,uPointSize,uPointSprite,uColorMat;
+static GLint uMVP,uMV,uNMat,uUseTex,uTex,uLightOn,uDot3On,uReplaceOn,uFogOn,uPointSize,uPointSprite,uColorMat,uBlurY,uAlphaRef,uAlfaAbajo;
+static float blurY = 0.0f;
+static float alphaRef = 0.0f;
+static int   alfaAbajo = 0;
 static GLint uLPos,uLDiff,uLAmb,uMDiff,uMAmb,uFogColor,uFogStart,uFogEnd;
 static GLint uMSpec,uMEmis,uShine,uLSpec; // specular + emissive del material/luz
 static GLint aLpos,aLnrm,aLuv,aLcol;
@@ -166,6 +169,9 @@ static const char* FS =
 "precision mediump float;\n"
 "precision mediump int;\n"
 "uniform int uUseTex; uniform int uLightOn; uniform int uDot3On; uniform int uReplaceOn; uniform int uFogOn;\n"
+"uniform float uBlurY;\n"   // blur vertical (0 = apagado)
+"uniform float uAlphaRef;\n" // descarte por alpha (0 = apagado)
+"uniform int uAlfaAbajo;\n"  // 1 = el ALPHA viene en la mitad de ABAJO de la textura
 "uniform int uColorMat;\n" // COLOR_MATERIAL: usar el color del vertice (vC) como diffuse/ambient del material
 "uniform int uPointSprite;\n"
 "uniform sampler2D uTex;\n"
@@ -175,7 +181,23 @@ static const char* FS =
 "varying vec3 vN; varying vec3 vP; varying vec2 vT; varying vec4 vC; varying float vFogZ;\n"
 "void main(){\n"
 "  vec2 uv = (uPointSprite==1) ? gl_PointCoord : vT;\n" // point sprite: coord por-fragmento (iconos)
-"  vec4 tex = (uUseTex==1) ? texture2D(uTex,uv) : vec4(1.0);\n"
+"  vec4 tex = vec4(1.0);\n"
+"  if(uUseTex==1){\n"
+"    if(uBlurY > 0.0){\n"                       // 9 muestras a lo largo de V (motion blur)
+"      vec4 acc = vec4(0.0);\n"
+"      for(int i=-4;i<=4;i++){\n"
+"        float vv = uv.y + float(i)*uBlurY*0.25;\n"
+"        float m = step(0.0,vv)*step(vv,1.0);\n"   // fuera de la textura NO aporta: si no, el
+"        acc += texture2D(uTex, vec2(uv.x, vv)) * m;\n" // CLAMP repite el borde y deja chorreones
+"      }\n"
+"      tex = acc * (1.0/9.0);\n"
+"    } else tex = texture2D(uTex,uv);\n"
+"    if(uAlfaAbajo==1){\n"                      // video con alpha EMPAQUETADO. El frame se sube
+"                                             \n"  // invertido en Y, asi que en la TEXTURA el color
+"                                             \n"  // queda en la mitad de ABAJO y la mascara arriba.
+"      tex.a = texture2D(uTex, vec2(uv.x, uv.y - 0.5)).r;\n"  // la mascara, media textura mas abajo
+"    }\n"
+"  }\n"
 "  vec4 col;\n"
 "  if(uDot3On==1){ vec3 N=normalize(tex.rgb*2.0-1.0); vec3 L=normalize(vC.rgb*2.0-1.0); col=vec4(vec3(max(dot(N,L),0.0)),1.0); }\n"
 "  else if(uReplaceOn==1){ col=tex; }\n"
@@ -187,6 +209,7 @@ static const char* FS =
 "    col.rgb += uMEmis.rgb; }\n"                                                  // emissive (negro = no suma nada)
 "  else { col=vC*tex; }\n"
 "  if(uFogOn==1){ float f=clamp((uFogEnd-vFogZ)/(uFogEnd-uFogStart),0.0,1.0); col.rgb=mix(uFogColor.rgb,col.rgb,f); }\n"
+"  if(uAlphaRef > 0.0 && col.a < uAlphaRef) discard;\n"   // no pinta NI escribe z-buffer
 "  gl_FragColor=col;\n"
 "}\n";
 
@@ -243,6 +266,9 @@ static void buildProgram(){
     uUseTex=glGetUniformLocation(prog,"uUseTex"); uTex=glGetUniformLocation(prog,"uTex");
     uLightOn=glGetUniformLocation(prog,"uLightOn"); uDot3On=glGetUniformLocation(prog,"uDot3On"); uReplaceOn=glGetUniformLocation(prog,"uReplaceOn");
     uColorMat=glGetUniformLocation(prog,"uColorMat");
+    uBlurY=glGetUniformLocation(prog,"uBlurY");
+    uAlphaRef=glGetUniformLocation(prog,"uAlphaRef");
+    uAlfaAbajo=glGetUniformLocation(prog,"uAlfaAbajo");
     uFogOn=glGetUniformLocation(prog,"uFogOn"); uPointSize=glGetUniformLocation(prog,"uPointSize");
     uPointSprite=glGetUniformLocation(prog,"uPointSprite");
     uLPos=glGetUniformLocation(prog,"uLPos"); uLDiff=glGetUniformLocation(prog,"uLDiff"); uLAmb=glGetUniformLocation(prog,"uLAmb");
@@ -337,6 +363,9 @@ void DepthRange(float n,float f){
 #endif
 }
 void ReadPixelsRGBA(int x,int y,int w,int h,unsigned char* px){ glReadPixels(x,y,w,h,GL_RGBA,GL_UNSIGNED_BYTE,px); }
+void BlurY(float amt){ blurY = (amt > 0.0f) ? amt : 0.0f; }   // blur vertical por shader
+void AlphaTest(float ref){ alphaRef = (ref > 0.0f) ? ref : 0.0f; }  // descarte por alpha
+void AlfaEmpaquetado(bool si){ alfaAbajo = si ? 1 : 0; }   // alpha en la mitad de abajo
 void BlendAlpha(){ glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); }
 void BlendMode(int modo){
     if(modo==1)      glBlendFunc(GL_DST_COLOR, GL_ZERO);         // Multiply
@@ -476,7 +505,10 @@ static void setupState(int nV){
     glUniformMatrix3fv(uNMat,1,GL_FALSE,nmat);
     glUniform1i(uUseTex,cap_tex?1:0);
     glUniform1i(uLightOn,(cap_light && !dot3On && !replaceOn)?1:0);
-    glUniform1i(uColorMat,cap_colormat?1:0); // vertex color como material (COLOR_MATERIAL) con luz activa
+    glUniform1i(uColorMat,cap_colormat?1:0);
+    glUniform1f(uBlurY, blurY);
+    glUniform1f(uAlphaRef, alphaRef);
+    glUniform1i(uAlfaAbajo, alfaAbajo); // vertex color como material (COLOR_MATERIAL) con luz activa
     glUniform1i(uDot3On,dot3On?1:0);
     glUniform1i(uReplaceOn,replaceOn?1:0);
     glUniform1i(uFogOn,cap_fog?1:0);

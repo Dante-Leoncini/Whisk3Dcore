@@ -161,6 +161,23 @@ namespace w3dEngine {
         MezclaSubtract,  // resta:     REVERSE_SUBTRACT / aprox en GL ES 1.1 (oscurece)
         MezclaCount_     // (cantidad; dejalo ultimo)
     };
+    // BLUR VERTICAL por shader (motion blur de rodillos, etc). 'amt' en fraccion de la textura
+    // (0 = apagado). SOLO tiene efecto en el backend GL ES 2.0 / WebGL (shaders); en el pipeline
+    // fijo (desktop GL / GL ES 1.1 / N95) es un no-op silencioso.
+    void BlurY(float amt);
+
+    // DESCARTE POR ALPHA: los pixeles con alpha < ref no se dibujan NI escriben en el z-buffer
+    // (ref = 0 lo apaga). Sirve, por ejemplo, para dibujar con z-buffer cosas con bordes
+    // recortados (esquinas redondeadas): por el agujero se sigue viendo lo de atras.
+    // GLES2 -> 'discard' en el shader. Fija -> GL_ALPHA_TEST.
+    void AlphaTest(float ref);
+
+    // VIDEO CON ALPHA EMPAQUETADO: la textura trae el COLOR en la mitad de arriba y la MASCARA
+    // (en gris) en la mitad de abajo. Sirve para reproducir animaciones con transparencia en
+    // plataformas cuyo decodificador de video no entrega canal alpha a la textura (Safari/iOS con
+    // VP9-alpha, por ejemplo). Solo tiene efecto en el backend con shaders (GLES2/WebGL).
+    void AlfaEmpaquetado(bool activado);
+
     void SetMezcla(int m);          // configura glBlendFunc/Equation segun el modo
     const char* MezclaNombre(int m); // nombre legible (para el menu del editor)
 

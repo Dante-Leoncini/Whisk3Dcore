@@ -29,9 +29,6 @@
 #include <cassert>
 #include <cstring>
 
-#ifndef W3D_SYMBIAN
-#include "importers/import_obj.h" // (llega a Symbian en la Fase 4)
-#endif
 
 static void ParseFace(const std::string& line, Face& f) {
     std::istringstream ss(line.substr(2));

@@ -42,6 +42,10 @@ public:
     // Devuelve NULL si no existe. *outLen recibe el largo.
     const unsigned char* Get(const char* name, size_t* outLen) const;
 
+    // Suelta el buffer descifrado y el indice (queda como recien construido). Sirve para
+    // liberar los MB de un pack que ya no se usa (ej: al cambiar de juego) sin destruirlo.
+    void Close();
+
     int Count() const;
 
 private:

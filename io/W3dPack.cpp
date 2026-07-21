@@ -59,6 +59,11 @@ W3dPack::~W3dPack() { delete[] entries; delete[] blob; }
 
 int W3dPack::Count() const { return count; }
 
+void W3dPack::Close() {
+    delete[] entries; entries = 0; count = 0;
+    delete[] blob;    blob = 0;    blobLen = 0;
+}
+
 bool W3dPack::OpenMemory(const void* packBytes, size_t packLen, const unsigned char key[32]) {
     delete[] entries; entries = 0; count = 0;
     delete[] blob; blob = 0; blobLen = 0;

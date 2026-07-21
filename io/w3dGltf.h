@@ -380,24 +380,63 @@ inline Vector3 Rot3(const Matrix4& W, const Vector3& n) {
 
 // dibuja el modelo animado en 'timeSec', en el viewport (vx,vy,vw,vh), vista ORTOGRAFICA que encuadra el logo
 // mirando de frente (-Z).
-inline void Draw(Model& M, float timeSec, int vx, int vy, int vw, int vh) {
+// ENCUADRE: centro y semiextension con que se mira un modelo. Se calcula aparte de Draw para
+// poder (a) COMPARTIRLO entre dos modelos y que se compongan como en el editor, y (b) INTERPOLARLO
+// entre dos encuadres, que es como se mueve/agranda un modelo de un lugar a otro sin tocar su malla.
+struct Encuadre { Vector3 centro; float hx, hy, r; };
+
+// bounding box de un modelo, o la UNION de dos (para componer varias piezas del mismo logo)
+inline void Union(const Model& A, const Model& B, Vector3& bmin, Vector3& bmax) {
+    bmin = A.bmin; bmax = A.bmax;
+    if (B.bmin.x < bmin.x) bmin.x = B.bmin.x;  if (B.bmax.x > bmax.x) bmax.x = B.bmax.x;
+    if (B.bmin.y < bmin.y) bmin.y = B.bmin.y;  if (B.bmax.y > bmax.y) bmax.y = B.bmax.y;
+    if (B.bmin.z < bmin.z) bmin.z = B.bmin.z;  if (B.bmax.z > bmax.z) bmax.z = B.bmax.z;
+}
+
+inline Encuadre CalcEncuadre(const Vector3& bmin, const Vector3& bmax, int vw, int vh) {
     if (vw<1) vw=1; if (vh<1) vh=1;
-    // encuadre: fit del bounding XY del logo al viewport (letterbox), con margen para la rotacion (el logo gira
-    // en Y -> su ancho proyectado puede llegar al radio en Z; se toma max(ancho/2, radioZ) como semi-ancho).
-    Vector3 c = (M.bmin + M.bmax) * 0.5f;
-    Vector3 ext = M.bmax - M.bmin;
-    float r = ext.x; if (ext.y>r) r=ext.y; if (ext.z>r) r=ext.z; if (r<1e-4f) r=1.0f;
-    float exM = ext.x*0.5f; float rz = ext.z*0.5f; if (rz>exM) exM=rz; // semi-ancho considerando el giro
+    Encuadre e;
+    e.centro = (bmin + bmax) * 0.5f;
+    Vector3 ext = bmax - bmin;
+    e.r = ext.x; if (ext.y>e.r) e.r=ext.y; if (ext.z>e.r) e.r=ext.z; if (e.r<1e-4f) e.r=1.0f;
+    float exM = ext.x*0.5f; float rz = ext.z*0.5f; if (rz>exM) exM=rz; // semi-ancho con el giro
     float ey  = ext.y*0.5f;
     if (exM<1e-4f) exM=1.0f; if (ey<1e-4f) ey=1.0f;
     exM *= 1.12f; ey *= 1.12f; // margen
     float aspect = (float)vw/(float)vh;
-    float hx = exM, hy = ey;
-    if (exM/ey > aspect) hy = exM/aspect; else hx = ey*aspect; // letterbox: el logo entra entero, centrado
+    e.hx = exM; e.hy = ey;
+    if (exM/ey > aspect) e.hy = exM/aspect; else e.hx = ey*aspect;   // letterbox: entra entero
+    return e;
+}
+inline Encuadre CalcEncuadre(const Model& M, int vw, int vh) { return CalcEncuadre(M.bmin, M.bmax, vw, vh); }
+
+// mezcla lineal de dos encuadres (u=0 -> a, u=1 -> b): mueve y escala el modelo entre dos lugares
+inline Encuadre Mezclar(const Encuadre& a, const Encuadre& b, float u) {
+    Encuadre e;
+    e.centro = a.centro + (b.centro - a.centro) * u;
+    e.hx = a.hx + (b.hx - a.hx) * u;
+    e.hy = a.hy + (b.hy - a.hy) * u;
+    e.r  = a.r  + (b.r  - a.r ) * u;
+    return e;
+}
+
+// 'alfa' <1 dibuja el modelo TRANSPARENTE (para que aparezca de a poco). Con alfa>=1 el
+// dibujo es opaco como siempre (mismo camino de antes, sin costo).
+// 'mundo' (opcional) es una matriz 4x4 EXTRA que se aplica al modelo entero despues de la
+// camara: sirve para animarlo (girarlo sobre un eje, correrlo) sin tocar su malla.
+inline void Draw(Model& M, float timeSec, int vx, int vy, int vw, int vh,
+                 const Encuadre* enc = 0, float alfa = 1.0f, const float* mundo = 0) {
+    if (vw<1) vw=1; if (vh<1) vh=1;
+    // encuadre: fit del bounding XY del logo al viewport (letterbox), con margen para la rotacion (el logo gira
+    // en Y -> su ancho proyectado puede llegar al radio en Z; se toma max(ancho/2, radioZ) como semi-ancho).
+    Encuadre E = enc ? *enc : CalcEncuadre(M, vw, vh);
+    Vector3 c = E.centro;
+    float r = E.r, hx = E.hx, hy = E.hy;
     gfx::Viewport(vx,vy,vw,vh);
     gfx::Enable(gfx::DepthTest);
     gfx::Disable(gfx::Lighting);
-    gfx::Disable(gfx::Blend);
+    if (alfa < 0.999f) { gfx::Enable(gfx::Blend); gfx::SetMezcla(gfx::MezclaAlpha); }
+    else               { gfx::Disable(gfx::Blend); }
 
     gfx::MatrixMode(gfx::Projection); gfx::LoadIdentity();
     gfx::Ortho(-hx, hx, -hy, hy, -r*4.0f, r*4.0f);
@@ -405,6 +444,7 @@ inline void Draw(Model& M, float timeSec, int vx, int vy, int vw, int vh) {
     // "camara": centrar el logo (miramos de frente, -Z). Base de camara en MUNDO para el reflejo por SW (chrome).
     Matrix4 view; view.Identity(); view.m[12]=-c.x; view.m[13]=-c.y; view.m[14]=-c.z;
     gfx::LoadMatrix(view.m);
+    if (mundo) gfx::MultMatrix(mundo);
     Vector3 cr(1,0,0), cu(0,1,0), cf(0,0,-1);   // ejes de la camara (orto de frente)
     Vector3 cam = c + Vector3(0,0, r*3.0f);      // ojo en +Z
     static std::vector<float> ruv;               // UV del reflejo (reusado por primitiva)
@@ -418,7 +458,7 @@ inline void Draw(Model& M, float timeSec, int vx, int vy, int vw, int vh) {
             Mat mt; mt.tex=0; mt.base[0]=mt.base[1]=mt.base[2]=mt.base[3]=1.0f; mt.doubleSided=false; mt.chrome=false; mt.reflectMode=0;
             if (P.material>=0 && P.material<(int)M.mats.size()) mt = M.mats[P.material];
             if (mt.doubleSided) gfx::Disable(gfx::CullFace); else gfx::Enable(gfx::CullFace);
-            gfx::Color4f(mt.base[0], mt.base[1], mt.base[2], mt.base[3]);
+            gfx::Color4f(mt.base[0], mt.base[1], mt.base[2], mt.base[3]*alfa);
             gfx::EnableArray(gfx::VertexArray); gfx::VertexPointer3f(0, &P.pos[0]);
             bool usoChrome = (mt.chrome && mt.tex && !P.nrm.empty());
             if (usoChrome) {

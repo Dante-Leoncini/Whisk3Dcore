@@ -435,6 +435,16 @@ void MaterialShininess(float s) {
 }
 
 void BlendAlpha() { glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); }
+// BLUR por shader: el pipeline FIJO no tiene shaders -> no-op (la app no se rompe, solo no difumina).
+void BlurY(float) {}
+
+void AlfaEmpaquetado(bool) {}   // sin shaders no hay forma: se ignora (el video sale opaco)
+
+void AlphaTest(float ref) {
+    if (ref > 0.0f) { glAlphaFunc(GL_GREATER, ref); glEnable(GL_ALPHA_TEST); }
+    else            { glDisable(GL_ALPHA_TEST); }
+}
+
 // modos de mezcla nombrados (ver enum Mezcla). Fixed-function: anda en PC y GL ES 1.1 (N95).
 void SetMezcla(int m) {
 #ifndef W3D_SYMBIAN

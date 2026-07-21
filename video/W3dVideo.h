@@ -38,6 +38,11 @@ public:
     // Textura GL con el frame actual (RGBA; el alpha viene incluido si el video lo
     // tiene). Devuelve 0 hasta que haya al menos un frame decodificado.
     virtual unsigned int Texture() const = 0;
+    // true cuando la reproduccion LLEGO AL FINAL (util para los videos que van una sola vez)
+    virtual bool Terminado() const { return false; }
+    // true si la textura viene con ALPHA PREMULTIPLICADO (asi entrega el decodificador de video):
+    // hay que dibujarla con MezclaPremult, no con la mezcla alpha comun.
+    virtual bool Premultiplicado() const { return false; }
 
     virtual int  Width()    const = 0;
     virtual int  Height()   const = 0;
@@ -53,7 +58,16 @@ W3dVideo* W3dVideoOpen(const char* path, bool loop);
 // de un .w3dpack (ver io/W3dPack.h) y NUNCA son un archivo ni una URL. 'mime' identifica
 // el contenedor para el backend web ("video/mp4", "video/webm"). Manten los bytes vivos
 // hasta el primer frame (el backend web arma un Blob interno a partir de ellos).
-W3dVideo* W3dVideoOpenMemory(const void* bytes, size_t len, const char* mime, bool loop);
+// 'conSonido' = el video se reproduce con su audio (por defecto va mudo, que es lo unico que
+// los navegadores dejan autoreproducir). Solo tiene sentido si arranca por una accion del usuario.
+W3dVideo* W3dVideoOpenMemory(const void* bytes, size_t len, const char* mime, bool loop,
+                             bool conSonido = false);
+
+// DESBLOQUEO de video. Llamalo DENTRO del gesto del usuario (toque/click) cuando el video
+// todavia no esta listo (ej: sus bytes se estan descargando): "estrena" un reproductor y lo
+// reserva, para que el W3dVideoOpen* POSTERIOR pueda reproducir. En las plataformas que no
+// lo necesitan no hace nada.
+void W3dVideoUnlock();
 
 } // namespace w3dEngine
 

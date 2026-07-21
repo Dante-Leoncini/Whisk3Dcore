@@ -1,5 +1,14 @@
 #include "VertexAnimation.h"
 
+// Normal (-1..1) -> byte con signo. Era una lambda: el Core se compila en C++03 para Symbian,
+// que no las tiene.
+static GLbyte conv(double v) {
+    v = ((v + 1.0) * 0.5) * 255.0 - 128.0;
+    if (v > 127) v = 127;
+    if (v < -128) v = -128;
+    return (GLbyte)v;
+}
+
 VertexAnimation::VertexAnimation(Mesh* tgt, const std::string& animName, bool useNormals, float Speed, bool Repeat, int ProximaAnimacion):
       frameCount(0), proximaAnimacion(ProximaAnimacion), speed(Speed),
       padding(0), repeat(Repeat), target(tgt), UseNormals(useNormals) {
@@ -21,7 +30,7 @@ bool VertexAnimation::LoadFrames() {
              << i
              << ".obj";
 
-        std::ifstream file(path.str());
+        std::ifstream file(path.str().c_str());   // C++03: no acepta std::string
         if (!file.is_open()) {
             std::cerr << "[Anim] No se pudo abrir " << path.str() << "\n";
             return false;
@@ -33,12 +42,6 @@ bool VertexAnimation::LoadFrames() {
 
         std::string line;
 
-        auto conv = [](double v) -> GLbyte {
-            v = ((v + 1.0) * 0.5) * 255.0 - 128.0;
-            if (v > 127) v = 127;
-            if (v < -128) v = -128;
-            return (GLbyte)v;
-        };
 
         // ---------- PARSE OBJ ----------
         while (std::getline(file, line)) {
@@ -267,7 +270,9 @@ VertexAnimationActive* FindTargetAnim(Mesh* target) {
     if (!target)
         return NULL;
 
-    for (VertexAnimationActive* active : VertexAnimationActives) {
+    for (std::vector<VertexAnimationActive*>::iterator it = VertexAnimationActives.begin();
+         it != VertexAnimationActives.end(); ++it) {
+        VertexAnimationActive* active = *it;
         if (!active) continue;
 
         if (active->meshToAnim == target) {
@@ -293,7 +298,9 @@ void NewActiveVertexAnimation(Mesh* mesh, VertexAnimation* anim){
 void LoadVertexFrames(Mesh* mesh){
     if (!mesh) return;
 
-    for (auto* anim : mesh->animations) {
+    for (std::vector<VertexAnimation*>::iterator it = mesh->animations.begin();
+         it != mesh->animations.end(); ++it) {
+        VertexAnimation* anim = *it;
         anim->target = mesh;
 
         if (anim->frames.empty()) {

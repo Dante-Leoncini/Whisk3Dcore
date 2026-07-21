@@ -14,7 +14,6 @@
     #include <GLES/gl.h>
 #else
     #include <GL/gl.h>
-    #include "render/OpcionesRender.h"
 #endif
 #include "Textures.h"
 

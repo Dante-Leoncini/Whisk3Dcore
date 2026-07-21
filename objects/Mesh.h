@@ -381,8 +381,8 @@ class Mesh : public Object {
         // y el pivot lo usan (en mundo) en vez del origen. Se calcula en CalcularBordes.
         Vector3 centroGeom;
         float   radioGeom;  // radio del bounding LOCAL alrededor de centroGeom (lo usa el foco/encuadre)
-        Vector3 PuntoFoco() const override; // centro geometrico en MUNDO
-        float   RadioFoco() const override; // radio del bounding en MUNDO (centroGeom*escala); foco '.'
+        Vector3 PuntoFoco() const W3D_OVERRIDE; // centro geometrico en MUNDO
+        float   RadioFoco() const W3D_OVERRIDE; // radio del bounding en MUNDO (centroGeom*escala); foco '.'
 
         // escala un radio LOCAL (alrededor de cLocal) a MUNDO tomando el mayor de los 3 ejes (robusto
         // a escala no uniforme). Lo usan RadioFoco (malla entera) y el encuadre del foco en Edit Mode.
@@ -452,8 +452,8 @@ class Mesh : public Object {
         void RenderEditOverlay(); // dibuja el overlay de edit (hook: el cuerpo deref edit, vive en main/)
 
         // delegan en EditMesh (los llaman SeleccionarTodo/DeseleccionarTodo/Invertir)
-        void EditSeleccionarTodo(bool sel) override;
-        void EditInvertir() override;
+        void EditSeleccionarTodo(bool sel) W3D_OVERRIDE;
+        void EditInvertir() W3D_OVERRIDE;
 
         // BORRA la seleccion de Edit Mode segun el modo (SelVertex/SelEdge/SelFace):
         //  - SelFace:   borra las caras seleccionadas; mantiene sus bordes+vertices
@@ -547,10 +547,10 @@ class Mesh : public Object {
 
         ~Mesh();
 
-        ObjectType getType() override;
+        ObjectType getType() W3D_OVERRIDE;
 
         void LiberarMemoria();
-        void RenderObject() override;
+        void RenderObject() W3D_OVERRIDE;
         // dibuja los bordes (edges) como GL_LINES. pushBack empuja el zbuffer
         // atras (para el contorno verde: tapa las lineas internas, deja el borde).
         void RenderBordes(const float* color, float width, bool pushBack);

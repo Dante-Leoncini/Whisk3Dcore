@@ -9,6 +9,7 @@
 #endif
 
 #include <vector>
+#include "crossplatform.h"   // W3D_OVERRIDE (antes llegaba de rebote por Objects.h)
 #include "objects/Objects.h"
 #ifdef W3D_SYMBIAN
     #include <GLES/gl.h>
@@ -34,11 +35,11 @@ class Light : public Object {
 
         static Light* Create(Object* parent = NULL, float x = 0, float y = 0, float z = 0);
 
-        ObjectType getType() override;
+        ObjectType getType() W3D_OVERRIDE;
 
         void SetDiffuse(float r = 1.0f, float g = 1.0f, float b = 1.0f);
         void SetLightID(GLenum ID);
-        void RenderObject() override;
+        void RenderObject() W3D_OVERRIDE;
 
         ~Light();
 

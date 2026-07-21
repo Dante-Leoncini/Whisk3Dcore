@@ -11,6 +11,12 @@
 #include <vector>
 // reloj de milisegundos de la plataforma (lo provee el EDITOR; el core no
 // depende de ninguna libreria de ventana). Ver w3dGetTicks en main.cpp.
+// RELOJ del motor, en milisegundos. Lo DEFINE el Core (respaldo portable con clock()), asi que
+// un proyecto puede usar el motor sin tener que adivinar que hay que definir un simbolo global
+// con este nombre exacto. Si la plataforma tiene un reloj mejor (SDL_GetTicks, GetTickCount,
+// User::TickCount), se registra con W3dSetReloj y el motor lo usa.
+typedef unsigned int (*W3dRelojFn)();
+void W3dSetReloj(W3dRelojFn fn);
 unsigned int w3dGetTicks();
 #ifdef W3D_SYMBIAN
     #include <GLES/gl.h>   // N95: OpenGL ES 1.1 (GLshort/GLbyte/GLfloat)

@@ -23,11 +23,8 @@
 //  - sin inicializadores de miembro en la clase (van al constructor)
 //  - NULL en vez de nullptr, std::set en vez de unordered_set
 
-// 'override' es C++11: en compiladores viejos (RVCT 2.2) se anula; en PC
-// sigue siendo el keyword real con su chequeo
-#if defined(__cplusplus) && __cplusplus < 201103L
-    #define override
-#endif
+// (W3D_OVERRIDE vive en base/crossplatform.h: antes se hacia '#define override' aca, o sea que
+//  este header le robaba un keyword a TODO el que lo incluyera, su propio codigo incluido)
 #ifndef W3D_SYMBIAN
     // dependencias que el core todavia arrastra en PC; en la limpieza de la
     // Fase 5 vuelan de aca (el core no debe tocar GL ni la UI)

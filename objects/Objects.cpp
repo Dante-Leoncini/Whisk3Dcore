@@ -1,6 +1,11 @@
 #include "Objects.h"
 #include "w3dGraphics.h" // flags de estado de render (w3dRenderLuces) — PC y Symbian
 
+// RAIZ de la escena. La DEFINE el Core (antes solo la declaraba y la definia el editor, asi que
+// nadie podia enlazar contra el motor sin traerse el editor entero). El editor la llena con su
+// propia raiz (una Scene) en el arranque; para el motor alcanza con que exista y valga 0.
+Object* SceneCollection = 0;
+
 #ifdef W3D_SYMBIAN
 // Symbian: GLES + utilidades de C que en PC llegan por otros headers.
 #include <GLES/gl.h>

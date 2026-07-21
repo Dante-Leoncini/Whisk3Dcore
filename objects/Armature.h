@@ -2,6 +2,7 @@
 #define ARMATURE_H
 
 #include "objects/Objects.h"
+#include "crossplatform.h"   // W3D_OVERRIDE (antes llegaba de rebote por Objects.h)
 #include "math/Matrix4.h"
 #include <vector>
 #include <string>
@@ -82,13 +83,13 @@ class Armature : public Object {
 
         Armature(Object* parent = NULL, Vector3 pos = Vector3(0, 0, 0))
             : Object(parent, "Armature", pos), animActiva(-1), skinUsaBind(false), skinReconstruirFK(false), skinGltf(false), poseDirty(false), boneActivo(-1), lastPoseFrame(-999999), lastPoseAnim(-999), figureScale(1.0f), poseSerial(1) {}
-        ~Armature() override; // libera los clips (animations)
+        ~Armature() W3D_OVERRIDE; // libera los clips (animations)
 
-        ObjectType getType() override { return ObjectType::armature; }
-        void RenderObject() override; // huesos como lineas AZULES, siempre encima (sin z-test)
+        ObjectType getType() W3D_OVERRIDE { return ObjectType::armature; }
+        void RenderObject() W3D_OVERRIDE; // huesos como lineas AZULES, siempre encima (sin z-test)
         // encuadre ('.'/frame selected): envuelve TODOS los huesos (poseHead/poseTail), no solo el origen
-        Vector3 PuntoFoco() const override;
-        float   RadioFoco() const override;
+        Vector3 PuntoFoco() const W3D_OVERRIDE;
+        float   RadioFoco() const W3D_OVERRIDE;
 };
 
 #endif // ARMATURE_H

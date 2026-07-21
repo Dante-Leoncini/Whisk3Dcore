@@ -3,6 +3,21 @@
 #include "SkeletalAnimation.h"   // clips de armature (startFrame/endFrame/FrameRate) para el rango por animacion
 #include "objects/Armature.h"    // ActiveAnimArm->animations / animActiva
 #include <stdio.h> // sprintf GLOBAL (nombre unico de escena); Symbian/STLport no tiene std::snprintf
+#include <ctime>
+
+// ---- RELOJ del motor (ver Animation.h) ---------------------------------------------------
+// Antes esto era una funcion global que el USUARIO del motor tenia que definir con este nombre
+// exacto, sin ningun aviso mas que un comentario: el editor la ponia en main.cpp y cualquier
+// otro proyecto se comia un "undefined reference" sin saber por que.
+static W3dRelojFn gReloj = 0;
+
+void W3dSetReloj(W3dRelojFn fn) { gReloj = fn; }
+
+unsigned int w3dGetTicks() {
+    if (gReloj) return gReloj();
+    // respaldo portable: sirve para animar, aunque mida tiempo de CPU y no de pared.
+    return (unsigned int)((double)clock() * 1000.0 / (double)CLOCKS_PER_SEC);
+}
 
 // Variables globales
 bool PlayAnimation = false;   // arranca PAUSADO (el timeline lo togglea con Play)

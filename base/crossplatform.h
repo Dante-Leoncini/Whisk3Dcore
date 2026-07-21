@@ -1,5 +1,15 @@
 #pragma once
 
+// 'override' es C++11 y en Symbian (RVCT 2.2) no existe. Se usa W3D_OVERRIDE y NO un
+// '#define override': redefinir un keyword se lo impone a todo proyecto que incluya el motor,
+// y basta con que un header nuevo use 'override' sin incluir el que trae la macro para que
+// Symbian deje de compilar.
+#if defined(__cplusplus) && __cplusplus >= 201103L
+    #define W3D_OVERRIDE override
+#else
+    #define W3D_OVERRIDE
+#endif
+
 // ===============================
 // Windows
 // ===============================
@@ -9,6 +19,7 @@
 #if defined(_WIN32) && !defined(W3D_SYMBIAN)
 
 #define WIN32_LEAN_AND_MEAN
+
 #define NOMINMAX
 #include <windows.h>
 

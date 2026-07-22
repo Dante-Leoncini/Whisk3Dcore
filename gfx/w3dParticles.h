@@ -49,6 +49,10 @@ struct ParticleSystem {
     float tintR, tintG, tintB;    // tinte global (1,1,1 = sin tinte)
     float offsetX, offsetY, offsetZ; // corrimiento global del campo al DIBUJAR (parallax / mover el emisor)
     int   blend;                  // modo de mezcla (enum Mezcla). Default: MezclaAdd
+    // Con mezcla ADITIVA el color se multiplica por el alfa (asi la particula "desaparece").
+    // Con mezcla ALFA eso OSCURECE la particula mientras se desvanece, que casi nunca es lo que
+    // se quiere: colorPlano deja el color quieto y solo baja el alfa.
+    bool  colorPlano;
     int   maxParts;               // tope de particulas vivas
     unsigned texs[8]; int nTex;   // texturas (elige una al azar por particula)
 
@@ -69,7 +73,7 @@ struct ParticleSystem {
         alphaMin=0.3f; alphaMax=1.0f; spinMin=-0.5f; spinMax=0.5f;
         fadeIn=0.12f; fadeOut=0.30f; rate=0; tintR=1; tintG=1; tintB=1;
         offsetX=0; offsetY=0; offsetZ=0;
-        blend=MezclaAdd; maxParts=200; nTex=0; acc=0; phase=0; rng=2463534242u;
+        blend=MezclaAdd; colorPlano=false; maxParts=200; nTex=0; acc=0; phase=0; rng=2463534242u;
     }
 
     void SetTexturas(const unsigned* t, int n) { if(n>8)n=8; nTex=n; for(int i=0;i<n;i++) texs[i]=t[i]; }
@@ -142,7 +146,8 @@ struct ParticleSystem {
             float V[18] = { x0,y0,pz, x1,y1,pz, x2,y2,pz,  x0,y0,pz, x2,y2,pz, x3,y3,pz };
             VertexPointer3f(0,V); TexCoordPointer2f(0,UV);
             BindTexture(texs[p.tex]);
-            Color4f(tintR*b, tintG*b, tintB*b, b);               // additiva: alpha->0 = desaparece
+            if (colorPlano) Color4f(tintR, tintG, tintB, b);      // el color no se apaga: solo el alfa
+            else            Color4f(tintR*b, tintG*b, tintB*b, b); // aditiva: alpha->0 = desaparece
             DrawTrianglesArray(6);
         }
         DisableArray(TexCoordArray);

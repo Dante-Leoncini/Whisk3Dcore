@@ -76,27 +76,12 @@ EM_JS(void, w3dClipJS_Desbloqueo, (), {
         // cuando la musica todavia se esta descargando.
         try { if (Module.__w3dPrimeMusica) Module.__w3dPrimeMusica(); } catch (e) {}
         try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
-        // DESPERTAR LA SESION DE AUDIO (iOS): mientras la pagina no haya reproducido NINGUN
-        // medio, iOS no le activa la sesion de audio y todo suena mudo aunque el AudioContext
-        // diga 'running'. Por eso antes el sonido "aparecia" recien despues del primer video.
-        // Se estrena un <audio> con 0.05s de SILENCIO (sin mutear: mudo no activa la sesion) y
-        // se lo deja creado para reusarlo. Es lo primero que se hace DENTRO del gesto real.
-        if (!Module.__w3dSilencio) {
-            try {
-                var a = new Audio('data:audio/wav;base64,' +
-                                  'UklGRrQBAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YZABAACAgICAgICAgICAgICAgICAgICAgICAgICA' +
-                                  'gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA' +
-                                  'gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA' +
-                                  'gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA' +
-                                  'gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA' +
-                                  'gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA' +
-                                  'gICAgICAgICAgICAgICAgICAgICAgICAgICAgICA');
-                a.preload = 'auto'; a.setAttribute('playsinline', ''); a.volume = 1;
-                Module.__w3dSilencio = a;
-            } catch (e) {}
-        }
-        try { if (Module.__w3dSilencio) { Module.__w3dSilencio.currentTime = 0;
-              var pr = Module.__w3dSilencio.play(); if (pr && pr.catch) pr.catch(function(){}); } } catch (e) {}
+        // DESPERTAR LA SESION DE AUDIO (iOS): mientras la pagina no haya reproducido ningun
+        // medio, iOS no le activa la sesion y todo suena mudo aunque el AudioContext diga
+        // 'running'. Se estrena EL ELEMENTO DE LA MUSICA (arriba, __w3dPrimeMusica): NO otro
+        // aparte. iOS deja sonar UN solo <audio> a la vez, asi que un elemento silencioso propio
+        // le ganaba la carrera al de la musica y la musica no sonaba hasta que algo mas (un
+        // video) volvia a activar la sesion.
         var ctxs = [];
         if (Module.__w3dCtx) ctxs.push(Module.__w3dCtx);
         if (typeof SDL2 !== 'undefined' && SDL2.audioContext) ctxs.push(SDL2.audioContext);

@@ -40,27 +40,59 @@ EM_JS(void, w3dMusicJS_Unlock, (), {
         }
         if (a.__w3dOk) return;                       // ya esta estrenado
         a.src = 'data:audio/wav;base64,UklGRiwAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQgAAACAgICAgICAgA==';
-        var p = a.play();
-        if (p && p.then) p.then(function () { a.__w3dOk = true; }).catch(function () {});
-        else a.__w3dOk = true;
+        a.__w3dOk = true;                // optimista: marcarlo en el .then llegaba tarde para la
+        var p = a.play();                // primera pista, que arranca casi enseguida
+        if (p && p.catch) p.catch(function () { a.__w3dOk = false; });
     };
     // si el gesto del usuario ya paso, se estrena en el acto
     if (Module.__w3dGestoOk) Module.__w3dPrimeMusica();
 });
 
+// MUSICA POR WEBAUDIO, no por un elemento <audio>.
+// Por que: en iPhone el <audio> con una URL de blob NUNCA llego a reproducir. El registro del
+// telefono lo mostro sin lugar a dudas: la pista cargaba entera (readyState 4), no estaba
+// pausada, y aun asi currentTime se quedaba en 0 y terminaba en error 3 (fallo de
+// decodificacion), una y otra vez. Safari no decodifica ese mp3 desde blob:. En cambio los
+// EFECTOS de sonido, que ya iban por WebAudio, funcionaron siempre en el mismo aparato: ese es
+// el camino que sirve. Se decodifica una vez a un AudioBuffer y se reproduce en bucle con un
+// GainNode para el volumen (el .volume de un <audio> tampoco se respeta en iOS).
 EM_JS(int, w3dMusicJS_OpenMem, (const unsigned char* ptr, int len, const char* mimePtr, int loop, float vol), {
     if (!Module.__w3dMusic) Module.__w3dMusic = [];
-    var blob = new Blob([HEAPU8.subarray(ptr, ptr + len)], { type: UTF8ToString(mimePtr) });
-    var url = URL.createObjectURL(blob);
-    var a = (Module.__w3dPrimed && Module.__w3dPrimed.__w3dOk) ? Module.__w3dPrimed : new Audio();
-    if (a === Module.__w3dPrimed) Module.__w3dPrimed = null;   // se consume el estrenado
-    a.setAttribute('playsinline', '');
-    a.src = url; a.loop = !!loop; a.volume = vol;
-    a.addEventListener('loadeddata', function(){ URL.revokeObjectURL(url); }); // el blob deja de resolverse
-    var p = a.play(); if (p && p.catch) p.catch(function(){});                 // si el autoplay se bloquea, silencio
-    Module.__w3dMusic.push(a);
-    return Module.__w3dMusic.length - 1;
+    var C = window.AudioContext || window.webkitAudioContext;
+    if (!C) return -1;
+    if (!Module.__w3dCtx) {
+        try { Module.__w3dCtx = new C(); } catch (e) { return -1; }
+        try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
+    }
+    var ctx = Module.__w3dCtx;
+    var i = Module.__w3dMusic.length;
+    // 'quiere' = deberia estar sonando. Se decodifica en segundo plano; cuando el buffer llega,
+    // arranca solo (o no, si mientras tanto lo pausaron o lo liberaron).
+    var m = { buf: null, src: null, gain: null, vol: vol, loop: !!loop,
+              quiere: true, t0: 0, offset: 0, ctx: ctx };
+    Module.__w3dMusic.push(m);
+
+    m.arrancar = function () {
+        if (!m.buf || !m.quiere || m.src) return;
+        try {
+            if (ctx.state !== 'running' && ctx.resume) { try { ctx.resume(); } catch (e) {} }
+            var s = ctx.createBufferSource(); s.buffer = m.buf; s.loop = m.loop;
+            var g = ctx.createGain(); g.gain.value = m.vol;
+            s.connect(g); g.connect(ctx.destination);
+            s.start(0, m.offset % (m.buf.duration || 1));
+            m.src = s; m.gain = g; m.t0 = ctx.currentTime - m.offset;
+        } catch (e) {}
+    };
+
+    var datos = HEAPU8.slice(ptr, ptr + len).buffer;   // copia propia: decodeAudioData la consume
+    try {
+        ctx.decodeAudioData(datos,
+            function (b) { m.buf = b; m.arrancar(); },
+            function ()  { console.log('[musica] no pude decodificar la pista'); });
+    } catch (e) {}
+    return i;
 });
+
 EM_JS(int, w3dMusicJS_OpenUrl, (const char* pathPtr, int loop, float vol), {
     if (!Module.__w3dMusic) Module.__w3dMusic = [];
     var a = new Audio();
@@ -70,31 +102,48 @@ EM_JS(int, w3dMusicJS_OpenUrl, (const char* pathPtr, int loop, float vol), {
     return Module.__w3dMusic.length - 1;
 });
 EM_JS(void, w3dMusicJS_Stop, (int h), {
-    var a = Module.__w3dMusic && Module.__w3dMusic[h];
-    if (a) { try { a.pause(); a.src = ''; } catch(e){} Module.__w3dMusic[h] = null; }
+    var m = Module.__w3dMusic && Module.__w3dMusic[h];
+    if (!m) return;
+    m.quiere = false;
+    try { if (m.src) { m.src.stop(0); m.src.disconnect(); } } catch (e) {}
+    m.src = null; m.buf = null;                 // suelta el PCM decodificado (son varios MB)
+    Module.__w3dMusic[h] = null;
 });
+
 // OJO iOS: en iPhone/iPad la propiedad .volume de un <audio> es de SOLO LECTURA (el volumen
 // lo maneja el usuario con los botones del aparato): asignarla NO hace nada y la musica se
 // escucha a todo volumen. Lo que SI se respeta es .muted -> el silencio se hace con muted, y
 // el volumen fino queda para las plataformas que lo permiten (desktop/Android).
 EM_JS(void, w3dMusicJS_Vol, (int h, float v), {
-    var a = Module.__w3dMusic && Module.__w3dMusic[h];
-    if (!a) return;
-    a.volume = v;
-    a.muted  = (v <= 0.001);
+    var m = Module.__w3dMusic && Module.__w3dMusic[h];
+    if (!m) return;
+    m.vol = v;
+    // El GainNode SI funciona en iOS (el .volume de un <audio> se ignora).
+    if (m.gain) { try { m.gain.gain.value = v; } catch (e) {} }
 });
+
 EM_JS(void, w3dMusicJS_Pausa, (int h, int pausar), {
-    var a = Module.__w3dMusic && Module.__w3dMusic[h];
-    if (!a) return;
-    try {
-        if (pausar) a.pause();
-        else { var p = a.play(); if (p && p.catch) p.catch(function(){}); }
-    } catch (e) {}
+    var m = Module.__w3dMusic && Module.__w3dMusic[h];
+    if (!m) return;
+    if (pausar) {
+        m.quiere = false;
+        if (m.src) {
+            // Un BufferSource no se puede repausar: se guarda POR DONDE IBA y al reanudar se
+            // crea uno nuevo que arranca desde ahi.
+            try { m.offset = m.ctx.currentTime - m.t0; m.src.stop(0); m.src.disconnect(); } catch (e) {}
+            m.src = null;
+        }
+    } else {
+        m.quiere = true;
+        if (m.arrancar) m.arrancar();
+    }
 });
+
 EM_JS(int, w3dMusicJS_Playing, (int h), {
-    var a = Module.__w3dMusic && Module.__w3dMusic[h];
-    return (a && !a.paused) ? 1 : 0;
+    var m = Module.__w3dMusic && Module.__w3dMusic[h];
+    return (m && m.src) ? 1 : 0;
 });
+
 
 namespace w3dEngine {
 

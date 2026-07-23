@@ -19,6 +19,7 @@
 #if defined(W3D_ENABLE_VIDEO) && !defined(__EMSCRIPTEN__) && !defined(W3D_SYMBIAN)
 
 #include "W3dVideo.h"
+#include "W3dVideoBackend.h"   // contrato con el dispatcher: firma verificada al compilar
 
 extern "C" {
 #include <libavformat/avformat.h>
@@ -63,7 +64,7 @@ class W3dVideoFFmpeg : public W3dVideo {
 public:
     W3dVideoFFmpeg() : fmt(0), codecCtx(0), swsCtx(0), hwDev(0), frame(0), swFrame(0),
                        pkt(0), rgba(0), tex(0), avio(0), ioBuf(0), ownedBytes(0),
-                       vStream(-1), w(0), h(0), alpha(false), loop(false), ok(false), t0(-1.0) {
+                       vStream(-1), w(0), h(0), alpha(false), loop(false), ok(false), llegoAlFinal(false) {
         mem.data = 0; mem.size = 0; mem.pos = 0;
     }
 
@@ -134,13 +135,14 @@ public:
 
     bool Update(double nowMs) {
         if (!ok) return false;
-        if (t0 < 0) t0 = nowMs;
-        AVRational tb = fmt->streams[vStream]->time_base;
-
-        // decodifica hasta alcanzar el frame que corresponde al reloj (o hasta que no haya mas listo)
+        (void)nowMs;   // pacing simple: UN frame por llamada (el caller llama una vez por frame)
         for (int guard = 0; guard < 64; guard++) {
             int r = av_read_frame(fmt, pkt);
-            if (r < 0) { if (loop) { Rewind(); return false; } else return false; }
+            if (r < 0) {
+                if (loop) { Rewind(); return false; }
+                llegoAlFinal = true;   // video de una pasada: avisar (RQ borra el festejo con esto)
+                return false;
+            }
             if (pkt->stream_index != vStream) { av_packet_unref(pkt); continue; }
 
             avcodec_send_packet(codecCtx, pkt);
@@ -201,8 +203,9 @@ private:
     void Rewind() {
         av_seek_frame(fmt, vStream, 0, AVSEEK_FLAG_BACKWARD);
         avcodec_flush_buffers(codecCtx);
-        t0 = -1.0;
     }
+
+    bool Terminado() const { return llegoAlFinal; }
 
     AVFormatContext* fmt;
     AVCodecContext*  codecCtx;
@@ -219,7 +222,7 @@ private:
     W3dMemIO         mem;
     int  vStream, w, h;
     bool alpha, loop, ok;
-    double t0;
+    bool llegoAlFinal;
 };
 
 W3dVideo* W3dVideoOpenBackend(const char* path, bool loop) {
@@ -228,7 +231,7 @@ W3dVideo* W3dVideoOpenBackend(const char* path, bool loop) {
     return v;
 }
 
-W3dVideo* W3dVideoOpenMemoryBackend(const void* bytes, size_t len, const char* /*mime*/, bool loop) {
+W3dVideo* W3dVideoOpenMemoryBackend(const void* bytes, size_t len, const char* /*mime*/, bool loop, bool /*conSonido: audio del video no implementado en desktop*/) {
     W3dVideoFFmpeg* v = new W3dVideoFFmpeg(); // FFmpeg detecta el contenedor solo; el mime no hace falta
     if (!v->OpenMem(bytes, len, loop)) { delete v; return 0; }
     return v;

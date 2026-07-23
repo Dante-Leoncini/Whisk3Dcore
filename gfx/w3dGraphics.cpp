@@ -100,7 +100,7 @@ namespace w3dEngine {
 //  puesto no hace nada). Valido solo si TODO el estado pasa por el motor; tras
 //  GL directo, Invalidate() resincroniza.
 // ============================================================================
-static const int kNumCaps = 14; // = cantidad de valores del enum Cap
+static const int kNumCaps = CapCount_; // el enum manda: agregar una Cap ya no puede desbordar
 static bool gCapOn[kNumCaps] = { false };    // estado que el motor cree puesto
 static bool gCapKnown[kNumCaps] = { false }; // false = no lo conocemos -> forzar la llamada
 static unsigned int gTexBound = 0;           // estado inicial de GL: sin textura
@@ -223,7 +223,6 @@ void BindTexture(unsigned int id) {
     glBindTexture(GL_TEXTURE_2D, id);
 }
 
-unsigned int BoundTexture() { return gTexBound; }
 
 // CHROME: genera las UV con sphere-map del pipeline fijo (PC). En GLES1 (Symbian) no hay glTexGen ->
 // stub (calcular las UV del chrome por software a partir del normal y la camara).
@@ -467,19 +466,6 @@ void SetMezcla(int m) {
         case MezclaAlpha:
         default:             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); break; // normal
     }
-}
-const char* MezclaNombre(int m) {
-    switch (m) {
-        case MezclaOff:      return "Opaco";
-        case MezclaAlpha:    return "Alpha (normal)";
-        case MezclaAdd:      return "Aditiva";
-        case MezclaAddAlpha: return "Aditiva (alpha)";
-        case MezclaMultiply: return "Multiplicar";
-        case MezclaScreen:   return "Screen";
-        case MezclaPremult:  return "Alpha premult.";
-        case MezclaSubtract: return "Substractiva";
-    }
-    return "?";
 }
 void BlendMode(int modo) { // capa multi-pass sobre lo de abajo
     if (modo == 1)      glBlendFunc(GL_DST_COLOR, GL_ZERO);                 // Multiply (oscurece)

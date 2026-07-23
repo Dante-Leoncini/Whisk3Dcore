@@ -70,8 +70,8 @@ void VibrarInit() {
 }
 
 void Vibrar(VibFuerza f) {
+    if (!gListo) VibrarInit();   // PRIMERO cargar la config: sino la primera vibracion ignora el ajuste guardado
     if (!gActiva) return;
-    if (!gListo) VibrarInit();
     int ms = (f == VibGolpe) ? 32 : (f == VibToque ? 18 : 10);
     w3dVibJS_Vibrar(ms);
 }

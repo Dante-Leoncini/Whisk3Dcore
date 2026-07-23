@@ -57,22 +57,21 @@ void W3dChaCha20(const unsigned char key[32], unsigned int counter,
 W3dPack::W3dPack() : entries(0), count(0), blob(0), blobLen(0) {}
 W3dPack::~W3dPack() { delete[] entries; delete[] blob; }
 
-int W3dPack::Count() const { return count; }
-
 void W3dPack::Close() {
     delete[] entries; entries = 0; count = 0;
     delete[] blob;    blob = 0;    blobLen = 0;
 }
 
 bool W3dPack::OpenMemory(const void* packBytes, size_t packLen, const unsigned char key[32]) {
-    delete[] entries; entries = 0; count = 0;
-    delete[] blob; blob = 0; blobLen = 0;
+    Close();   // una sola rutina de limpieza (antes estaba copiada aca y en el path de error)
 
     const unsigned char* p = (const unsigned char*)packBytes;
     if (packLen < 12 || memcmp(p, "W3DPACK1", 8) != 0) return false;
     u32 cnt = rd32le(p + 8);
+    // validar ANTES de multiplicar: en 32 bits (Symbian/wasm/armv7) cnt*40 puede dar la vuelta
+    // y un pack corrupto pasaria el chequeo de tamano con un header gigante.
+    if (cnt > (packLen - 12) / 40) return false;
     size_t headerLen = 12 + (size_t)cnt * 40; // por entrada: name(32)+offset(4)+length(4)
-    if (packLen < headerLen) return false;
 
     entries = new Entry[cnt ? cnt : 1];
     count = (int)cnt;
@@ -88,9 +87,9 @@ bool W3dPack::OpenMemory(const void* packBytes, size_t packLen, const unsigned c
     W3dChaCha20(key, 0, p + headerLen, blob, blobLen); // descifra a nuestro buffer
 
     for (u32 i = 0; i < cnt; i++) { // los offsets deben caer dentro del blob
-        if ((size_t)entries[i].offset + entries[i].length > blobLen) {
-            delete[] entries; entries = 0; count = 0;
-            delete[] blob; blob = 0; blobLen = 0;
+        // comparar SIN sumar: offset+length puede dar la vuelta en 32 bits y "pasar" el chequeo
+        if (entries[i].offset > blobLen || entries[i].length > blobLen - entries[i].offset) {
+            Close();
             return false;
         }
     }
@@ -138,6 +137,9 @@ bool W3dPackBuild(const char* outPath, const char* const* names,
     unsigned char* enc = new unsigned char[blobLen ? blobLen : 1];
     W3dChaCha20(key, 0, plain, enc, blobLen);
 
+    for (int i = 0; i < count; i++) {
+        if (strlen(names[i]) > 31) return false;   // truncarlo haria que Get(nombre) falle en silencio
+    }
     FILE* f = fopen(outPath, "wb");
     bool ok = false;
     if (f) {
@@ -146,7 +148,7 @@ bool W3dPackBuild(const char* outPath, const char* const* names,
         wr32le(b4, (u32)count); fwrite(b4, 1, 4, f);
         for (int i = 0; i < count; i++) {
             char nm[32]; memset(nm, 0, 32);
-            strncpy(nm, names[i], 31); // nombre < 32 chars
+            strncpy(nm, names[i], 31); // largo ya validado arriba (<= 31)
             fwrite(nm, 1, 32, f);
             wr32le(b4, offs[i]);         fwrite(b4, 1, 4, f);
             wr32le(b4, (u32)lens[i]);    fwrite(b4, 1, 4, f);

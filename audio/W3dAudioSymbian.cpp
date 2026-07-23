@@ -12,6 +12,7 @@
 #if defined(W3D_ENABLE_AUDIO) && defined(W3D_SYMBIAN)
 
 #include "W3dAudio.h"
+#include "W3dAudioBackend.h"   // contrato con el dispatcher: firma verificada al compilar
 #include <e32base.h>
 #include <e32std.h>
 #include <MdaAudioOutputStream.h>
@@ -61,7 +62,7 @@ void CW3dAudioStream::ConstructL() {
 CW3dAudioStream::~CW3dAudioStream() { delete iStream; }
 
 void CW3dAudioStream::MaoscOpenComplete(TInt aError) {
-    if (aError != KErrNone) return;
+    if (aError != KErrNone) { CActiveScheduler::Stop(); return; }   // sin stream no hay quien vea s_stop: cortar el hilo ya
     TInt sr = TMdaAudioDataSettings::ESampleRate22050Hz;
     if      (iRate == 11025) sr = TMdaAudioDataSettings::ESampleRate11025Hz;
     else if (iRate == 44100) sr = TMdaAudioDataSettings::ESampleRate44100Hz;
@@ -73,7 +74,8 @@ void CW3dAudioStream::MaoscOpenComplete(TInt aError) {
     WriteNext(); // encolar dos buffers para arrancar sin cortes
 }
 void CW3dAudioStream::MaoscBufferCopied(TInt aError, const TDesC8&) {
-    if (aError == KErrNone) WriteNext();
+    if (aError != KErrNone) { CActiveScheduler::Stop(); return; }   // idem: si la cadena se corta, Shutdown no puede colgarse
+    WriteNext();
 }
 void CW3dAudioStream::MaoscPlayComplete(TInt) {}
 

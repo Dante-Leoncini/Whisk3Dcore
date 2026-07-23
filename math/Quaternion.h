@@ -60,7 +60,7 @@ struct Quaternion {
         return Quaternion(w, -x, -y, -z);
     }
 
-    // Rota un vector usando q * v * q⁻¹
+    // Rota un vector usando q * v * q^-1
     Vector3 operator*(const Vector3& v) const {
         // q * v
         Quaternion qv(0, v.x, v.y, v.z);
@@ -121,7 +121,5 @@ struct Quaternion {
     static Quaternion FromDirection(const Vector3& direction, const Vector3& worldUp);
 };
 
-// out = A * B  (column-major, como espera glMultMatrixf)
-void MultiplyMatrix(float out[16], const float A[16], const float B[16]);
 
 #endif

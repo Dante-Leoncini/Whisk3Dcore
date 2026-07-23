@@ -46,7 +46,6 @@ public:
     // liberar los MB de un pack que ya no se usa (ej: al cambiar de juego) sin destruirlo.
     void Close();
 
-    int Count() const;
 
 private:
     W3dPack(const W3dPack&);            // no copiable (es duenio del buffer descifrado)

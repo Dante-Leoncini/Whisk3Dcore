@@ -15,6 +15,7 @@
 #ifdef W3D_ENABLE_MUSIC
 
 #include "W3dMusic.h"
+#include "W3dMusicBackend.h"   // contrato con el dispatcher: firma verificada al compilar
 #include <emscripten.h>
 
 // --- glue JS: pool de <audio> indexado por handle entero ---
@@ -93,14 +94,6 @@ EM_JS(int, w3dMusicJS_OpenMem, (const unsigned char* ptr, int len, const char* m
     return i;
 });
 
-EM_JS(int, w3dMusicJS_OpenUrl, (const char* pathPtr, int loop, float vol), {
-    if (!Module.__w3dMusic) Module.__w3dMusic = [];
-    var a = new Audio();
-    a.src = UTF8ToString(pathPtr); a.loop = !!loop; a.volume = vol;
-    var p = a.play(); if (p && p.catch) p.catch(function(){});
-    Module.__w3dMusic.push(a);
-    return Module.__w3dMusic.length - 1;
-});
 EM_JS(void, w3dMusicJS_Stop, (int h), {
     var m = Module.__w3dMusic && Module.__w3dMusic[h];
     if (!m) return;
@@ -167,8 +160,10 @@ W3dMusic* W3dMusicPlayMemoryBackend(const void* bytes, size_t len, const char* m
 void W3dMusicUnlockBackend() { w3dMusicJS_Unlock(); }
 
 W3dMusic* W3dMusicPlayBackend(const char* path, bool loop, float volume) {
-    int h = w3dMusicJS_OpenUrl(path, loop ? 1 : 0, volume);
-    return (h < 0) ? 0 : new W3dMusicWeb(h);
+    // en web NO hay musica por URL: el <audio> crudo no convive con el pool WebAudio (Stop no
+    // pausaba, y en iOS .volume es solo-lectura). Todo entra por PlayMemory (bytes del pack).
+    (void)path; (void)loop; (void)volume;
+    return 0;
 }
 
 } // namespace w3dEngine

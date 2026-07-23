@@ -73,7 +73,9 @@ EM_JS(void, w3dSA_grad, (const unsigned char* rgb, int n), {
     }
     var raiz = document.documentElement;
     raiz.style.backgroundColor = 'rgb(' + HEAPU8[rgb] + ',' + HEAPU8[rgb+1] + ',' + HEAPU8[rgb+2] + ')';
-    raiz.style.backgroundImage = 'linear-gradient(' + partes.join(',') + ')';
+    var css = 'linear-gradient(' + partes.join(',') + ')';
+    Module.__w3dFondoGrad = css;   // respaldo debajo de la imagen (w3dSA_imagen lo compone)
+    raiz.style.backgroundImage = css;
     document.body.style.background = 'transparent';
     // theme-color: es lo UNICO que tiñe la barra del navegador en iOS. Se usa el color del borde
     // de ABAJO de la escena, que es justo donde va esa barra.
@@ -87,19 +89,6 @@ EM_JS(void, w3dSA_grad, (const unsigned char* rgb, int n), {
     raiz.style.backgroundColor = abajo;
 });
 
-EM_JS(void, w3dSA_color, (int rt, int gt, int bt, int rb, int gb, int bb), {
-    var a = 'rgb(' + rt + ',' + gt + ',' + bt + ')';
-    var b = 'rgb(' + rb + ',' + gb + ',' + bb + ')';
-    var css = 'linear-gradient(' + a + ' 0%, ' + a + ' 50%, ' + b + ' 50%, ' + b + ' 100%)';
-    var raiz = document.documentElement;
-    Module.__w3dFondoGrad = css;          // queda guardado como respaldo debajo de la imagen
-    raiz.style.backgroundColor = a;      // Safari pinta las franjas con el COLOR del root; si solo
-    raiz.style.backgroundImage = css;    // le doy un degradado, puede ignorarlo y dejarlas negras
-    document.body.style.background = 'transparent';
-    var m = document.querySelector('meta[name=theme-color]');
-    if (!m) { m = document.createElement('meta'); m.name = 'theme-color'; document.head.appendChild(m); }
-    m.content = a;                       // barra del navegador en Android/Chrome
-});
 #endif
 
 namespace w3dEngine {
@@ -121,13 +110,6 @@ void SafeAreaSetDegradado(const unsigned char* rgb, int n) {
 #endif
 }
 
-void SafeAreaSetColor(int rt, int gt, int bt, int rb, int gb, int bb) {
-#ifdef __EMSCRIPTEN__
-    w3dSA_color(rt, gt, bt, rb, gb, bb);
-#else
-    (void)rt; (void)gt; (void)bt; (void)rb; (void)gb; (void)bb;   // sin franjas: nada que pintar
-#endif
-}
 
 static SafeArea gSA = { 0.0f, 0.0f, 0.0f, 0.0f };
 

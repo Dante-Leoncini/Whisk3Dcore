@@ -4,6 +4,7 @@
 //  stubs que devuelven NULL (la app sigue muda, sin dependencias). Ver W3dMusic.h.
 // ============================================================================
 #include "W3dMusic.h"
+#include "W3dMusicBackend.h"   // contrato compartido con los backends
 #include "W3dVolumen.h"
 
 namespace w3dEngine {
@@ -32,22 +33,18 @@ void W3dMusicRefrescarVolumenes() {
 
 #ifdef W3D_ENABLE_MUSIC
 
-// los define el backend de la plataforma (W3dMusicWeb.cpp / W3dMusicSymbian.cpp / W3dMusicSDL.cpp)
-W3dMusic* W3dMusicPlayMemoryBackend(const void* bytes, size_t len, const char* mime, bool loop, float volume);
-W3dMusic* W3dMusicPlayBackend(const char* path, bool loop, float volume);
-void      W3dMusicUnlockBackend();
+// el contrato con el backend vive en W3dMusicBackend.h (lo incluyen los dos lados)
 
 W3dMusic* W3dMusicPlayMemory(const void* bytes, size_t len, const char* mime, bool loop, float volume) {
     if (!bytes || !len) return 0;
-    // arranca ya con el volumen global aplicado (si esta muteado, nace en silencio)
-    W3dMusic* m = W3dMusicPlayMemoryBackend(bytes, len, mime, loop, volume * AudioGanancia());
-    if (m) m->SetVolume(volume);
+    W3dMusic* m = W3dMusicPlayMemoryBackend(bytes, len, mime, loop, volume);
+    if (m) m->SetVolume(volume);   // UNICO aplicador del volumen real (ya multiplica la ganancia global)
     return m;
 }
 W3dMusic* W3dMusicPlay(const char* path, bool loop, float volume) {
     if (!path) return 0;
-    W3dMusic* m = W3dMusicPlayBackend(path, loop, volume * AudioGanancia());
-    if (m) m->SetVolume(volume);
+    W3dMusic* m = W3dMusicPlayBackend(path, loop, volume);
+    if (m) m->SetVolume(volume);   // UNICO aplicador del volumen real
     return m;
 }
 void W3dMusicUnlock() { W3dMusicUnlockBackend(); }

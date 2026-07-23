@@ -48,9 +48,6 @@ void SafeRect(int w, int h, float* x, float* y, float* sw, float* sh);
 // estado ni detras de la barra de herramientas: esas franjas las pinta el navegador con el
 // color de fondo de la pagina, y si es negro se ven dos bandas negras. Con esto le decimos
 // el color de arriba y el de abajo (ej: el color promedio del borde del fondo del juego) y
-// las franjas se funden con la escena en vez de cortarla.
-// Componentes 0..255. En las plataformas sin franjas no hace nada.
-void SafeAreaSetColor(int rTop, int gTop, int bTop, int rBot, int gBot, int bBot);
 
 // IMAGEN de fondo para esas franjas. Es lo mejor que se puede hacer en un navegador de celular:
 // ningun ELEMENTO de la pagina puede pintar donde va la barra del navegador, pero el fondo del

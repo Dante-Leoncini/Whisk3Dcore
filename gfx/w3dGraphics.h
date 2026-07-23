@@ -33,7 +33,8 @@ namespace w3dEngine {
         PointSprite,    // sprites de punto (coord de textura por punto)
         Dither,         // dithering
         Light0,         // luz 0 del pipeline fijo
-        Multisample     // anti-aliasing MSAA (hay que APAGARLO en el color-ID pick)
+        Multisample,    // anti-aliasing MSAA (hay que APAGARLO en el color-ID pick)
+        CapCount_       // (cantidad; dejalo ultimo, los backends dimensionan arrays con esto)
     };
     void Enable(Cap c);
     void Disable(Cap c);
@@ -89,7 +90,6 @@ namespace w3dEngine {
     // Bindea la textura 2D. El motor recuerda cual esta puesta: si ya es esa,
     // NO hace la llamada GL (ahorra el bind, que es caro). id 0 = ninguna.
     void BindTexture(unsigned int id);
-    unsigned int BoundTexture();       // la textura que el motor cree bindeada
 
     // CHROME (env-map esferico / matcap): genera las UV desde el normal -> reflejo falso. PC = GL_SPHERE_MAP
     // del pipeline fijo (hardware). Symbian/GLES1 NO tiene glTexGen: queda como stub (UV por software TODO).
@@ -179,7 +179,6 @@ namespace w3dEngine {
     void AlfaEmpaquetado(bool activado);
 
     void SetMezcla(int m);          // configura glBlendFunc/Equation segun el modo
-    const char* MezclaNombre(int m); // nombre legible (para el menu del editor)
 
     // --- parametros de la textura 2D ACTIVA (la del ultimo BindTexture) ---
     void TexFilter(bool linear); // true=LINEAR, false=NEAREST (min y mag)

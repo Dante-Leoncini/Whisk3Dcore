@@ -6,6 +6,7 @@
 #if defined(W3D_ENABLE_AUDIO) && !defined(W3D_SYMBIAN)
 
 #include "W3dAudio.h"
+#include "W3dAudioBackend.h"   // contrato con el dispatcher: firma verificada al compilar
 #include <SDL2/SDL.h>
 
 namespace w3dEngine {

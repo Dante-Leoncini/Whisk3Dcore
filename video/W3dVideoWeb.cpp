@@ -19,6 +19,7 @@
 #if defined(W3D_ENABLE_VIDEO) && defined(__EMSCRIPTEN__)
 
 #include "W3dVideo.h"
+#include "W3dVideoBackend.h"   // contrato con el dispatcher: firma verificada al compilar
 #include <emscripten.h>
 #include <GLES2/gl2.h>
 

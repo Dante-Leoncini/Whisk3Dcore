@@ -45,9 +45,7 @@ struct JVal {
         for (size_t i = 0; i < keys.size(); i++) if (keys[i] == k) return &arr[i];
         return 0;
     }
-    bool has(const char* k) const { return find(k) != 0; }
     int    getI(const char* k, int d) const { const JVal* v = find(k); return (v && v->t == NUM) ? (int)v->num : d; }
-    double getN(const char* k, double d) const { const JVal* v = find(k); return (v && v->t == NUM) ? v->num : d; }
     std::string getS(const char* k, const char* d) const { const JVal* v = find(k); return (v && v->t == STR) ? v->str : std::string(d); }
     bool   getB(const char* k, bool d) const { const JVal* v = find(k); return (v && v->t == BOOL) ? v->b : d; }
     size_t size() const { return arr.size(); }
@@ -116,7 +114,10 @@ inline void b64decode(const char* s, size_t n, std::vector<unsigned char>& out){
 // ---------- datos renderizables ----------
 struct Prim { std::vector<float> pos, uv, nrm; int nverts; int material; bool hasUV; };
 struct NodeT { int mesh; Vector3 T; Quaternion R; Vector3 S; };
-struct Mat { unsigned tex; float base[4]; bool doubleSided; bool chrome; int reflectMode; }; // chrome = reflejo por SW
+struct Mat { // chrome = reflejo por SW
+    unsigned tex; float base[4]; bool doubleSided; bool chrome; int reflectMode;
+    Mat() : tex(0), doubleSided(false), chrome(false), reflectMode(0) { base[0]=base[1]=base[2]=base[3]=1.0f; }
+};
 struct RotKey { float t; Quaternion q; };
 
 struct Model {
@@ -126,8 +127,7 @@ struct Model {
     std::map<int, std::vector<RotKey> > nodeRot; // nodo -> keyframes de rotacion (segundos)
     float duration; // segundos
     Vector3 bmin, bmax;
-    float fitAspect; // ancho/alto que ocupa el logo al encuadrarlo (con margen de giro) -> lo usa el caller p/ el viewport
-    Model() : duration(0), fitAspect(1.0f) { bmin = Vector3(1e9f,1e9f,1e9f); bmax = Vector3(-1e9f,-1e9f,-1e9f); }
+    Model() : duration(0) { bmin = Vector3(1e9f,1e9f,1e9f); bmax = Vector3(-1e9f,-1e9f,-1e9f); }
 };
 
 inline Matrix4 NodeMatrix(const NodeT& nd); // (def mas abajo) matriz local T*R*S de un nodo
@@ -226,7 +226,8 @@ inline bool LoadG(GetAsset get, void* ctx, const char* gltfName, Model& M) {
     // materiales
     const JVal* jmats = doc.find("materials");
     if (jmats) for (size_t i=0;i<jmats->size();i++) { const JVal& jm = jmats->arr[i];
-        Mat mt; mt.tex=0; mt.base[0]=mt.base[1]=mt.base[2]=mt.base[3]=1.0f; mt.doubleSided = jm.getB("doubleSided", false);
+        Mat mt;   // arranca como material por defecto (ctor)
+        mt.doubleSided = jm.getB("doubleSided", false);
         mt.chrome = false; mt.reflectMode = 0;
         const JVal* pbr = jm.find("pbrMetallicRoughness");
         if (pbr) { const JVal* bc = pbr->find("baseColorFactor");
@@ -301,11 +302,7 @@ inline bool LoadG(GetAsset get, void* ctx, const char* gltfName, Model& M) {
                 if(w.x<M.bmin.x)M.bmin.x=w.x; if(w.y<M.bmin.y)M.bmin.y=w.y; if(w.z<M.bmin.z)M.bmin.z=w.z;
                 if(w.x>M.bmax.x)M.bmax.x=w.x; if(w.y>M.bmax.y)M.bmax.y=w.y; if(w.z>M.bmax.z)M.bmax.z=w.z; } }
     }
-    // aspect del encuadre: ancho = max(extX, extZ) (el giro en Y puede llevar el ancho al radio en Z), alto = extY.
-    { Vector3 e = M.bmax - M.bmin; if (e.x < 0) e = Vector3(1,1,1);
-      float wdt = e.x > e.z ? e.x : e.z; float hgt = e.y;
-      M.fitAspect = (hgt > 1e-5f) ? (wdt / hgt) : 1.0f; if (M.fitAspect < 0.05f) M.fitAspect = 0.05f; if (M.fitAspect > 20.0f) M.fitAspect = 20.0f; }
-    w3dLogf("gltf: %d meshes, %d nodes, %d mats, dur=%.2fs, aspect=%.2f", (int)M.meshes.size(), (int)M.nodes.size(), (int)M.mats.size(), M.duration, M.fitAspect);
+    w3dLogf("gltf: %d meshes, %d nodes, %d mats, dur=%.2fs", (int)M.meshes.size(), (int)M.nodes.size(), (int)M.mats.size(), M.duration);
     return true;
 }
 
@@ -314,18 +311,6 @@ inline const unsigned char* PackGet(void* c, const char* name, size_t* len) { re
 // carga un glTF/GLB (y sus texturas/buffers externos) desde un W3dPack CIFRADO.
 inline bool Load(w3dEngine::W3dPack& pack, const char* gltfName, Model& M) { return LoadG(PackGet, &pack, gltfName, M); }
 
-struct FileCtx { std::string dir; std::vector<unsigned char> buf; }; // dir base + buffer reusado por Get
-inline const unsigned char* FileGet(void* c, const char* name, size_t* len) {
-    FileCtx* fc = (FileCtx*)c; std::string path = fc->dir;
-    if (!path.empty() && path[path.size()-1] != '/') path += "/"; path += name;
-    fc->buf.clear(); FILE* f = fopen(path.c_str(), "rb"); if (!f) { *len = 0; return 0; }
-    fseek(f,0,SEEK_END); long sz = ftell(f); fseek(f,0,SEEK_SET);
-    if (sz > 0) { fc->buf.resize((size_t)sz); if (fread(&fc->buf[0],1,(size_t)sz,f) != (size_t)sz) fc->buf.clear(); }
-    fclose(f); *len = fc->buf.size(); return fc->buf.empty() ? 0 : &fc->buf[0];
-}
-// carga un glTF/GLB desde un ARCHIVO. 'dir' = carpeta base (de ahi salen las texturas/buffers externos).
-// Ej (web con --embed-file assets@/assets):  gltf::LoadFile("assets", "whisk3d_logo.glb", model);
-inline bool LoadFile(const char* dir, const char* gltfName, Model& M) { FileCtx fc; fc.dir = dir ? dir : "."; return LoadG(FileGet, &fc, gltfName, M); }
 
 // matriz local de un nodo (T * R * S)
 inline Matrix4 NodeMatrix(const NodeT& nd) {
@@ -447,7 +432,7 @@ inline void Draw(Model& M, float timeSec, int vx, int vy, int vw, int vh,
     if (mundo) gfx::MultMatrix(mundo);
     Vector3 cr(1,0,0), cu(0,1,0), cf(0,0,-1);   // ejes de la camara (orto de frente)
     Vector3 cam = c + Vector3(0,0, r*3.0f);      // ojo en +Z
-    static std::vector<float> ruv;               // UV del reflejo (reusado por primitiva)
+    std::vector<float> ruv;                      // UV del reflejo (buffer local: nada de estado global escondido)
 
     for (size_t i=0;i<M.nodes.size();i++) { NodeT nd = M.nodes[i]; if (nd.mesh<0 || nd.mesh>=(int)M.meshes.size()) continue;
         nd.R = NodeRotAt(M, (int)i, nd.R, timeSec);   // rotacion animada
@@ -455,7 +440,7 @@ inline void Draw(Model& M, float timeSec, int vx, int vy, int vw, int vh,
         gfx::PushMatrix(); gfx::MultMatrix(W.m);
         std::vector<Prim>& prims = M.meshes[nd.mesh];
         for (size_t pi=0;pi<prims.size();pi++){ Prim& P = prims[pi]; if (P.nverts<3) continue;
-            Mat mt; mt.tex=0; mt.base[0]=mt.base[1]=mt.base[2]=mt.base[3]=1.0f; mt.doubleSided=false; mt.chrome=false; mt.reflectMode=0;
+            Mat mt;   // el ctor ya es el material por defecto
             if (P.material>=0 && P.material<(int)M.mats.size()) mt = M.mats[P.material];
             if (mt.doubleSided) gfx::Disable(gfx::CullFace); else gfx::Enable(gfx::CullFace);
             gfx::Color4f(mt.base[0], mt.base[1], mt.base[2], mt.base[3]*alfa);

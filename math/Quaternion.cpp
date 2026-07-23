@@ -25,7 +25,7 @@ Quaternion Quaternion::Slerp(
         end.w = -end.w;
     }
 
-    // Si están muy cerca, usar LERP normal (más barato)
+    // Si estan muy cerca, usar LERP normal (mas barato)
     const float DOT_THRESHOLD = 0.9995f;
     if (dot > DOT_THRESHOLD) {
         Quaternion result;
@@ -56,41 +56,20 @@ Quaternion Quaternion::Slerp(
 }
 
 Matrix4 Quaternion::ToMatrix() const {
+    // una sola fuente de verdad: la version inline del header llena el float[16]
     Matrix4 m;
     m.Identity();
-
-    float xx = x * x;
-    float yy = y * y;
-    float zz = z * z;
-    float xy = x * y;
-    float xz = x * z;
-    float yz = y * z;
-    float wx = w * x;
-    float wy = w * y;
-    float wz = w * z;
-
-    m.m[0]  = 1.0f - 2.0f * (yy + zz);
-    m.m[1]  = 2.0f * (xy + wz);
-    m.m[2]  = 2.0f * (xz - wy);
-
-    m.m[4]  = 2.0f * (xy - wz);
-    m.m[5]  = 1.0f - 2.0f * (xx + zz);
-    m.m[6]  = 2.0f * (yz + wx);
-
-    m.m[8]  = 2.0f * (xz + wy);
-    m.m[9]  = 2.0f * (yz - wx);
-    m.m[10] = 1.0f - 2.0f * (xx + yy);
-
+    ToMatrix(m.m);
     return m;
 }
 
-// Método de ayuda dentro de la clase Quaternion o utilidades:
+// Metodo de ayuda dentro de la clase Quaternion o utilidades:
 Quaternion Quaternion::FromDirection(const Vector3& direction, const Vector3& worldUp) {
     
-    // 1. Vector de Dirección (que apunta HASTA DONDE SE MUEVE el personaje)
+    // 1. Vector de Direccion (que apunta HASTA DONDE SE MUEVE el personaje)
     Vector3 moveDirection = direction.Normalized();
 
-    // 2. CORRECCIÓN CLAVE: El eje Z local del personaje debe ser opuesto al movimiento.
+    // 2. CORRECCION CLAVE: El eje Z local del personaje debe ser opuesto al movimiento.
     Vector3 forward = -moveDirection; // Eje Z local del personaje
     
     // 3. Eje Right (X local)
@@ -102,7 +81,7 @@ Quaternion Quaternion::FromDirection(const Vector3& direction, const Vector3& wo
     // Se calcula para ortogonalidad perfecta.
     Vector3 up = Vector3::Cross(forward, right).Normalized();
     
-    // 5. Construir Matriz de Orientación (Positivo [Right | Up | Forward])
+    // 5. Construir Matriz de Orientacion (Positivo [Right | Up | Forward])
     Matrix4 M;
     M.Identity();
 
@@ -125,30 +104,30 @@ Quaternion Quaternion::FromMatrix(const Matrix4& m) {
     if (trace > 0.0f) {
         float s = sqrtf(trace + 1.0f) * 2.0f;
         q.w = 0.25f * s;
-        // La rama 'trace' está bien
+        // La rama 'trace' esta bien
         q.x = (m.m[6] - m.m[9]) / s;
         q.y = (m.m[8] - m.m[2]) / s;
         q.z = (m.m[1] - m.m[4]) / s;
     }
-    // Rama 1: m.m[0] > m.m[5] y m.m[0] > m.m[10] (Máxima rotación alrededor de X)
+    // Rama 1: m.m[0] > m.m[5] y m.m[0] > m.m[10] (Maxima rotacion alrededor de X)
     else if (m.m[0] > m.m[5] && m.m[0] > m.m[10]) {
         float s = sqrtf(1.0f + m.m[0] - m.m[5] - m.m[10]) * 2.0f;
-        // CORRECCIÓN: Invertir signo de W para estabilidad
+        // CORRECCION: Invertir signo de W para estabilidad
         q.w = (m.m[6] - m.m[9]) / s; // m12 - m21
         q.x = 0.25f * s;
         q.y = (m.m[1]  + m.m[4]) / s;
         q.z = (m.m[2]  + m.m[8]) / s;
     }
-    // Rama 2: m.m[5] > m.m[10] (Máxima rotación alrededor de Y)
+    // Rama 2: m.m[5] > m.m[10] (Maxima rotacion alrededor de Y)
     else if (m.m[5] > m.m[10]) {
         float s = sqrtf(1.0f + m.m[5] - m.m[0] - m.m[10]) * 2.0f;
-        // CORRECCIÓN: Invertir signo de W para estabilidad
+        // CORRECCION: Invertir signo de W para estabilidad
         q.w = (m.m[8] - m.m[2]) / s; // m20 - m02
         q.x = (m.m[1]  + m.m[4]) / s;
         q.y = 0.25f * s;
         q.z = (m.m[6]  + m.m[9]) / s;
     }
-    // Rama 3: (Máxima rotación alrededor de Z)
+    // Rama 3: (Maxima rotacion alrededor de Z)
     else {
         float s = sqrtf(1.0f + m.m[10] - m.m[0] - m.m[5]) * 2.0f;
         q.w = (m.m[1] - m.m[4]) / s; // m10 - m01 (era m[4]-m[1] = signo INVERTIDO -> quaternion mal cerca de Z=180,
@@ -167,7 +146,7 @@ Vector3 Quaternion::ToEulerYXZ() const {
     // Pitch (X)
     float sinp = 2.0f * (w * x - y * z);
     if (fabs(sinp) >= 1.0f)
-        euler.x = copysignf(M_PI / 2.0f, sinp);
+        euler.x = (sinp < 0.0f) ? -(float)(M_PI / 2.0) : (float)(M_PI / 2.0);   // sin copysignf (C99): RVCT de Symbian no la trae
     else
         euler.x = asinf(sinp);
 
@@ -181,7 +160,7 @@ Vector3 Quaternion::ToEulerYXZ() const {
     float cosr = 1.0f - 2.0f * (x * x + z * z);
     euler.z = atan2f(sinr, cosr);
 
-    // RAD → DEG
+    // RAD -> DEG
     const float RAD2DEG = 57.2957795f;
     euler.x *= RAD2DEG;
     euler.y *= RAD2DEG;
@@ -254,17 +233,4 @@ void Quaternion::ToAxisAngle(float& angleDeg, Vector3& axis) const {
         axis.x = x / s; axis.y = y / s; axis.z = z / s;
     }
     angleDeg = ang * 57.2957795f;
-}
-
-// out = A * B  (column-major, como espera glMultMatrixf)
-void MultiplyMatrix(float out[16], const float A[16], const float B[16]) {
-    for (int r = 0; r < 4; ++r) {
-        for (int c = 0; c < 4; ++c) {
-            float sum = 0.0f;
-            for (int k = 0; k < 4; ++k) {
-                sum += A[k*4 + r] * B[c*4 + k]; // acceso por columnas
-            }
-            out[c*4 + r] = sum;
-        }
-    }
 }

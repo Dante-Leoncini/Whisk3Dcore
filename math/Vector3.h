@@ -2,9 +2,6 @@
 #define VECTOR3_H
 
 #include <math.h> // C puro: compila en RVCT (Symbian) y en PC igual
-#ifdef WIN32
-    #include <algorithm>
-#endif
 
 class Vector3 {
     public:
@@ -25,7 +22,7 @@ class Vector3 {
             return z;
         }
 
-        // Operadores básicos
+        // Operadores basicos
         Vector3 operator+(const Vector3& v) const {
             return Vector3(x + v.x, y + v.y, z + v.z);
         }
@@ -72,7 +69,7 @@ class Vector3 {
         }
 
         float Length() const {
-            return sqrtf(LengthSq()); // Usar LengthSq aquí también
+            return sqrtf(LengthSq()); // Usar LengthSq aqui tambien
         }
 
         static Vector3 Cross(const Vector3& a, const Vector3& b) {

@@ -123,8 +123,9 @@ namespace w3dEngine {
 // ============================================================================
 static bool cap_depth=false, cap_cull=false, cap_tex=false, cap_light=false, cap_blend=false, cap_fog=false, cap_scissor=false;
 static bool cap_colormat=false; // GL_COLOR_MATERIAL: el color del VERTICE reemplaza el diffuse/ambient del material
-static int  matMode = 1; // 0=Projection, 1=ModelView
+static int  matMode = 1; // 0=Projection, 1=ModelView, 2=Texture
 static Matrix4 curProj, curMV;
+static Matrix4 curTex;     // matriz de TEXTURA propia: escribirla NO pisa la modelview (el shader aun no la usa)
 static std::vector<Matrix4> stkProj, stkMV;
 static float lightPos[4]  = {0,0,1,0};
 static float lightDiff[4] = {1,1,1,1};
@@ -246,7 +247,7 @@ static Matrix4 mPerspective(float fovyDeg,float aspect,float n,float f){
     m.m[0]=1.0f/(aspect*t); m.m[5]=1.0f/t; m.m[10]=-(f+n)/(f-n); m.m[11]=-1; m.m[14]=-(2.0f*f*n)/(f-n);
     return m;
 }
-static Matrix4& cur(){ return matMode==0 ? curProj : curMV; }
+static Matrix4& cur(){ return matMode==0 ? curProj : (matMode==2 ? curTex : curMV); }
 
 // ============================================================================
 //  Compilar / linkear el programa
@@ -319,14 +320,15 @@ bool IsEnabled(Cap c){
     switch(c){
         case DepthTest: return cap_depth; case CullFace: return cap_cull; case Blend: return cap_blend;
         case ScissorTest: return cap_scissor; case Texture2D: return cap_tex; case Lighting: return cap_light;
-        case Fog: return cap_fog; default: return false;
+        case Fog: return cap_fog; case ColorMaterial: return cap_colormat;
+        default: return false;
     }
 }
 
 // ============================================================================
 //  Matrices
 // ============================================================================
-void MatrixMode(Matrix m){ matMode = (m==Projection)?0:1; } // TextureMatrix: TODO (matcap)
+void MatrixMode(Matrix m){ matMode = (m==Projection)?0:(m==TextureMatrix?2:1); }
 void LoadIdentity(){ cur().Identity(); }
 void PushMatrix(){ if(matMode==0) stkProj.push_back(curProj); else stkMV.push_back(curMV); }
 void PopMatrix(){ if(matMode==0){ if(!stkProj.empty()){ curProj=stkProj.back(); stkProj.pop_back(); } }
@@ -387,19 +389,6 @@ void SetMezcla(int m){
         default:             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); break;
     }
 }
-const char* MezclaNombre(int m){
-    switch(m){
-        case MezclaOff:      return "Opaco";
-        case MezclaAlpha:    return "Alpha (normal)";
-        case MezclaAdd:      return "Aditiva";
-        case MezclaAddAlpha: return "Aditiva (alpha)";
-        case MezclaMultiply: return "Multiplicar";
-        case MezclaScreen:   return "Screen";
-        case MezclaPremult:  return "Alpha premult.";
-        case MezclaSubtract: return "Substractiva";
-    }
-    return "?";
-}
 void SmoothShading(bool){}   // ES2 siempre interpola (smooth); FLAT seria un shader aparte -> TODO
 void FastPerspective(){}     // ES2 corrige perspectiva siempre
 void Invalidate(){}          // este backend no cachea estado GL
@@ -434,7 +423,6 @@ void MaterialShininess(float s){ matShine=s; } // exponente specular (0..128)
 //  Textura / texenv
 // ============================================================================
 void BindTexture(unsigned int id){ boundTex=id; glBindTexture(GL_TEXTURE_2D,id); }
-unsigned int BoundTexture(){ return boundTex; }
 void TexFilter(bool linear){ glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,linear?GL_LINEAR:GL_NEAREST); glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,linear?GL_LINEAR:GL_NEAREST); }
 void TexWrap(bool repeat){ glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,repeat?GL_REPEAT:GL_CLAMP_TO_EDGE); glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,repeat?GL_REPEAT:GL_CLAMP_TO_EDGE); }
 void TexEnvDot3(bool on){ dot3On=on; }
@@ -482,7 +470,8 @@ static void bindAttr(GLint loc,const Arr& ar,GLuint vbo,int nVerts,const float* 
     if(loc<0) return;
     if(ar.on && ar.ptr && nVerts>0){
         int elem = ar.size * bytesOf(ar.type);
-        int bytes = (ar.stride?ar.stride:elem) * nVerts;
+        // el ultimo vertice solo aporta 'elem' bytes: con stride>elem no hay que leer el relleno final
+        int bytes = ar.stride ? ar.stride*(nVerts-1)+elem : elem*nVerts;
         glBindBuffer(GL_ARRAY_BUFFER,vbo);
         glBufferData(GL_ARRAY_BUFFER,(GLsizeiptr)bytes,ar.ptr,GL_DYNAMIC_DRAW);
         // normal (byte -127..127 -> -1..1) y color (ubyte 0..255 -> 0..1) SI se normalizan.
@@ -533,6 +522,7 @@ static void drawIndexed(GLenum mode,int count,const unsigned short* idx16){
     glDrawElements(mode,count,GL_UNSIGNED_SHORT,(const void*)0);
 }
 static int maxIndex(const MeshIndex* ind,int count){ int n=0; for(int i=0;i<count;i++) if((int)ind[i]+1>n) n=(int)ind[i]+1; return n; }
+static int maxIndexU16(const unsigned short* ind,int count){ int n=0; for(int i=0;i<count;i++) if((int)ind[i]+1>n) n=(int)ind[i]+1; return n; }
 
 void DrawTriangles(int count,const MeshIndex* indices){
     if(!ready || count<=0 || !indices) return;
@@ -543,7 +533,7 @@ void DrawTriangles(int count,const MeshIndex* indices){
 }
 void DrawTrianglesByte(int count,const unsigned char* indices){
     if(!ready || count<=0 || !indices) return;
-    int nV=0; for(int i=0;i<count;i++) if((int)indices[i]+1>nV) nV=(int)indices[i]+1;
+    int nV=0; for(int i=0;i<count;i++) if((int)indices[i]+1>nV) nV=(int)indices[i]+1;   // bytes: sin overload
     setupState(nV);
     static std::vector<unsigned short> idx; idx.resize(count);
     for(int i=0;i<count;i++) idx[i]=(unsigned short)indices[i];
@@ -551,13 +541,11 @@ void DrawTrianglesByte(int count,const unsigned char* indices){
 }
 void DrawLinesIndexed(int count,const unsigned short* indices){
     if(!ready || count<=0 || !indices) return;
-    int nV=0; for(int i=0;i<count;i++) if((int)indices[i]+1>nV) nV=(int)indices[i]+1;
-    setupState(nV); drawIndexed(GL_LINES,count,indices);
+    setupState(maxIndexU16(indices,count)); drawIndexed(GL_LINES,count,indices);
 }
 void DrawLineStripIndexed(int count,const unsigned short* indices){
     if(!ready || count<=0 || !indices) return;
-    int nV=0; for(int i=0;i<count;i++) if((int)indices[i]+1>nV) nV=(int)indices[i]+1;
-    setupState(nV); drawIndexed(GL_LINE_STRIP,count,indices);
+    setupState(maxIndexU16(indices,count)); drawIndexed(GL_LINE_STRIP,count,indices);
 }
 // BUFFER OBJECTS: por ahora STUBS -> VBOSoportado()=false, asi Mesh cae al camino client-side de este backend (que
 // ya sube sus arrays a un VBO dinamico por draw). Los VBOs PERSISTENTES en el pipeline de atributos (glVertexAttrib

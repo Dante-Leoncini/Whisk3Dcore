@@ -1,4 +1,5 @@
 #include "W3dAudio.h"
+#include "W3dAudioBackend.h"   // contrato compartido con los backends (firma verificada al compilar)
 #ifdef W3D_ENABLE_AUDIO
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,11 +13,7 @@ namespace w3dEngine {
 
 #ifdef W3D_ENABLE_AUDIO
 
-// --- lo provee el backend de salida (W3dAudioSDL.cpp / W3dAudioSymbian.cpp) ---
-bool W3dAudioBackendInit(int sampleRate);   // abre el dispositivo y arranca a pedir W3dAudioMix
-void W3dAudioBackendShutdown();
-void W3dAudioBackendLock();                  // exclusion con el hilo de audio (SDL_LockAudioDevice / mutex)
-void W3dAudioBackendUnlock();
+// el contrato con el backend de salida vive en W3dAudioBackend.h (lo incluyen los dos lados)
 
 // ---------------------------------------------------------------------------
 //  Sonido = PCM stereo 16-bit ya al rate del mixer.
@@ -72,7 +69,7 @@ static W3dSound* decodeWav(const unsigned char* b, size_t len) {
         const unsigned char* id = b + off;
         unsigned int csz = rdU32(b + off + 4);
         const unsigned char* body = b + off + 8;
-        if (memcmp(id, "fmt ", 4) == 0 && csz >= 16) {
+        if (memcmp(id, "fmt ", 4) == 0 && csz >= 16 && off + 8 + 16 <= len) {   // el cuerpo (16 bytes) tiene que ENTRAR en el buffer
             if (rdU16(body) != 1) return 0;           // solo PCM sin comprimir
             channels = (int)rdU16(body + 2);
             srcRate  = (int)rdU32(body + 4);
@@ -129,6 +126,7 @@ W3dSound* W3dSoundLoadMemory(const void* bytes, size_t len) {
 }
 
 W3dSound* W3dSoundLoad(const char* path) {
+    if (!s_ready) return 0;   // igual que LoadMemory: sin mixer abierto el resample usaria un rate falso
     FILE* f = fopen(path, "rb");
     if (!f) return 0;
     fseek(f, 0, SEEK_END); long n = ftell(f); fseek(f, 0, SEEK_SET);

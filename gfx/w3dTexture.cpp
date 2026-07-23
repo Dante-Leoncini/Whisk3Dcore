@@ -4,6 +4,7 @@
 // ============================================================================
 
 #include "w3dTexture.h"
+#include "w3dGraphics.h"   // rutear binds por el cache del motor (sino queda desincronizado)
 #include "w3dlog.h"
 #include <map> // id de textura -> (w,h) para el aspect ratio en el UV editor
 #include <stdio.h>  // fopen/fwrite: escritura del PNG (PC/Web; Symbian = TODO via RFile)
@@ -61,7 +62,9 @@ unsigned int UploadRGBA(const unsigned char* rgba, int w, int h, bool filtrado) 
     }
     GLuint id = 0;
     glGenTextures(1, &id);
-    glBindTexture(GL_TEXTURE_2D, id);
+    // OJO: bind por la ABSTRACCION, no glBindTexture crudo: el backend cachea la textura bindeada
+    // y un bind por afuera lo deja mintiendo (la proxima BindTexture(id) se saltea y dibuja otra).
+    w3dEngine::BindTexture(id);
 
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0,
                  GL_RGBA, GL_UNSIGNED_BYTE, rgba);
@@ -72,8 +75,8 @@ unsigned int UploadRGBA(const unsigned char* rgba, int w, int h, bool filtrado) 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
-    glBindTexture(GL_TEXTURE_2D, 0);
-    g_texSizes[id] = std::make_pair(w, h); // recordar el tamaño para el aspect ratio del UV editor
+    w3dEngine::BindTexture(0);
+    g_texSizes[id] = std::make_pair(w, h); // recordar el tamano para el aspect ratio del UV editor
     return id;
 }
 
@@ -89,6 +92,7 @@ void DeleteTexture(unsigned int id) {
     if (!id) return;
     GLuint g = (GLuint)id;
     glDeleteTextures(1, &g);
+    w3dEngine::BindTexture(0);   // GL desbindea lo borrado; el cache del motor tiene que saberlo
     g_texSizes.erase(id);
 }
 
@@ -100,8 +104,8 @@ void DeleteTexture(unsigned int id) {
 // (en Android resuelve solo si es asset del APK o archivo real del /storage). SIN SDL.
 static stbi_uc* CargarPixeles(const char* path, int* w, int* h, int* canales, int reqComp) {
     std::vector<unsigned char> bytes;
-    if (!w3dFileSystem::ReadFileBytes(path ? path : "", bytes) || bytes.empty()) return nullptr;
-    return stbi_load_from_memory(bytes.data(), (int)bytes.size(), w, h, canales, reqComp);
+    if (!w3dFileSystem::ReadFileBytes(path ? path : "", bytes) || bytes.empty()) return 0;
+    return stbi_load_from_memory(&bytes[0], (int)bytes.size(), w, h, canales, reqComp);
 }
 
 // ----------------------------------------------------------------------------
@@ -120,9 +124,7 @@ bool DecodeImage(const char* path, unsigned char** outRGBA, int* outW, int* outH
     }
     const int n = w * h * 4;
     unsigned char* buf = new unsigned char[n];
-    for (int i = 0; i < n; i++) {
-        buf[i] = data[i];
-    }
+    memcpy(buf, data, n);
     stbi_image_free(data);
     *outRGBA = buf;
     if (outW) { *outW = w; }
@@ -175,15 +177,17 @@ bool DecodeThumbnail(const char* path, int maxSize, unsigned char** outRGBA, int
 #ifndef W3D_SYMBIAN
 bool LoadTexture(const char* path, unsigned int& outId, int* outW, int* outH) {
     int w = 0, h = 0, canales = 0;
-    stbi_uc* data = CargarPixeles(path, &w, &h, &canales, 0);
+    // SIEMPRE a RGBA: con canales reales (req=0) una imagen en escala de grises entrega 1-2 bytes
+    // por pixel y subirla como GL_RGB sobre-lee el heap. Pedir 4 canales lo resuelve de raiz.
+    stbi_uc* data = CargarPixeles(path, &w, &h, &canales, 4);
     if (!data) {
         return false;
     }
-    const GLenum formato = (canales == 4) ? GL_RGBA : GL_RGB;
+    const GLenum formato = GL_RGBA;
 
     GLuint id = 0;
     glGenTextures(1, &id);
-    glBindTexture(GL_TEXTURE_2D, id);
+    w3dEngine::BindTexture(id);   // por la abstraccion: el cache del backend queda al dia
 
 #ifdef __ANDROID__
     glTexImage2D(GL_TEXTURE_2D, 0, formato, w, h, 0,
@@ -206,7 +210,7 @@ bool LoadTexture(const char* path, unsigned int& outId, int* outW, int* outH) {
                       formato, GL_UNSIGNED_BYTE, data);
 #endif
 
-    glBindTexture(GL_TEXTURE_2D, 0);
+    w3dEngine::BindTexture(0);
     stbi_image_free(data);
 
     outId = id;

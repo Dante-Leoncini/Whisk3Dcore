@@ -1,4 +1,7 @@
 #include "W3dVideo.h"
+#ifdef W3D_ENABLE_VIDEO
+#include "W3dVideoBackend.h"   // contrato compartido con los backends
+#endif
 
 // Dispatcher del modulo de video. SIEMPRE se compila (aunque el modulo este apagado):
 // cuando W3D_ENABLE_VIDEO no esta definido, W3dVideoOpen es un stub que devuelve NULL,
@@ -6,17 +9,9 @@
 
 namespace w3dEngine {
 
-#if defined(W3D_ENABLE_VIDEO)
-void W3dVideoUnlockBackend();
-void W3dVideoUnlock() { W3dVideoUnlockBackend(); }
-#else
-void W3dVideoUnlock() {}
-#endif
-
 #ifdef W3D_ENABLE_VIDEO
-// Los define el backend de la plataforma (W3dVideoWeb.cpp / W3dVideoFFmpeg.cpp / ...).
-W3dVideo* W3dVideoOpenBackend(const char* path, bool loop);
-W3dVideo* W3dVideoOpenMemoryBackend(const void* bytes, size_t len, const char* mime, bool loop, bool conSonido);
+// Un solo bloque para TODO el modulo prendido (antes habia dos #ifdef consecutivos del mismo flag).
+void W3dVideoUnlock() { W3dVideoUnlockBackend(); }
 
 W3dVideo* W3dVideoOpen(const char* path, bool loop) {
     return W3dVideoOpenBackend(path, loop);
@@ -26,6 +21,7 @@ W3dVideo* W3dVideoOpenMemory(const void* bytes, size_t len, const char* mime, bo
 }
 #else
 // Modulo apagado: sin backend, sin dependencias. La app maneja el NULL (frame estatico o nada).
+void W3dVideoUnlock() {}
 W3dVideo* W3dVideoOpen(const char* /*path*/, bool /*loop*/) { return 0; }
 W3dVideo* W3dVideoOpenMemory(const void*, size_t, const char*, bool, bool) { return 0; }
 #endif

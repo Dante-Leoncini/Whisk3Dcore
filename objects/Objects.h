@@ -45,7 +45,13 @@ struct ObjectType {
         scene, mesh, camera, light, empty, armature, curve,
         collection, baseObject, mirror, gamepad, instance, constraint,
         ui,             // raiz de una INTERFAZ 2D (se edita en el viewport Editor 2D)
-        texto2d         // elemento de TEXTO de una interfaz 2D (vive siempre dentro de un UI)
+        texto2d,        // elemento de TEXTO de una interfaz 2D (vive siempre dentro de un UI)
+        imagen2d,       // elemento de IMAGEN de una interfaz 2D (una textura con modo de ajuste)
+        rect2d,         // elemento RECTANGULO: color solido o transparente (acomoda elementos)
+        cont2d,         // elemento CONTENEDOR: rectangulo invisible que solo ordena a sus hijos
+        slice9,         // elemento SLICE 9: imagen con bordes fijos (marcos, botones, paneles)
+        boton2d,        // elemento BOTON: card con texto y/o icono (estilo Whisk3D)
+        expandir2d      // elemento EXPANDIR: absorbe el espacio libre en filas/columnas
     };
     Enum v;
     ObjectType(Enum e) : v(e) {}
